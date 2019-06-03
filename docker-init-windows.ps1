@@ -4,14 +4,20 @@ param (
   [Parameter(Mandatory=$true)][string]$ip
 )
 
-$file = $env:SystemRoot + "\Temp\" + (Get-Date).ToString("MM-dd-yy-hh-mm")
-New-Item $file -ItemType file
 $offlineDisks =  Get-Disk | Where-Object PartitionStyle -Eq 'RAW'
+$disksCount = $offlineDisks.Number.Count
+if ($disksCount -gt 1) {
+  $PhysicalDisks = Get-StorageSubSystem -FriendlyName "Windows Storage*" | Get-PhysicalDisk -CanPool $True
+  New-StoragePool -FriendlyName CodefreshData -StorageSubsystemFriendlyName "Windows Storage*" -PhysicalDisks $PhysicalDisks
+  $allowedDiskSize = (Get-StoragePool -isPrimordial $False).Size
+  New-VirtualDisk -FriendlyName CodefreshVirtualDisk -Size $allowedDiskSize -StoragePoolFriendlyName CodefreshData -ProvisioningType Thin
+  Initialize-Disk -VirtualDisk (Get-VirtualDisk -FriendlyName CodefreshVirtualDisk) -passthru | New-Partition -AssignDriveLetter -UseMaximumSize | Format-Volume
+} else {
 foreach ($disk in $offlineDisks) {
     Initialize-Disk -Number $disk.Number -PartitionStyle MBR
     New-Partition -DiskNumber $disk.Number -UseMaximumSize -AssignDriveLetter | Format-Volume -NewFileSystemLabel "Drive" -FileSystem NTFS
+  }
 }
-
 
 Write-Host "`nStarting Codefresh node installation...`n";
 
@@ -30,9 +36,9 @@ Start-Process "C:/cygwin64/bin/cygcheck.exe" -NoNewWindow -Wait -PassThru -Argum
 Write-Host "`nFinished installing Cygwin...";
 
 Write-Host 'Opening a local firewall port for the dockerd...';
-netsh advfirewall firewall add rule name="DockerD 2376" dir=in action=allow protocol=TCP localport=2376;
+  netsh advfirewall firewall add rule name="DockerD 2376" dir=in action=allow protocol=TCP localport=2376;
 
-Write-Host 'Disabling Windows-Defender...';
+  Write-Host 'Disabling Windows-Defender...';
 Uninstall-WindowsFeature -Name Windows-Defender
 
 $script_path = ($pwd.Path + '\cloud-init.sh').Replace('\', '/');
@@ -48,7 +54,7 @@ Please ensure:
 
 " 
 
-API_HOST=${API_HOST:-https://g.codefresh.io/api/nodes}
+API_HOST=https://g.codefresh.io/api/nodes
 
 #---
 fatal() {
@@ -56,7 +62,7 @@ fatal() {
    exit 1
 }
 
-while [[ $1 =~ ^(-(h|g|t|y)|--(gen-certs|token|yes|ip|iface|dns-name|install|no-install|restart|no-restart)) ]]
+while [[ $1 =~ ^(-(g|t|y)|--(gen-certs|token|yes|ip|iface|dns-name|install|no-install|restart|no-restart)) ]]
 do
   key=$1
   value=$2
@@ -64,9 +70,6 @@ do
   case $key in
     -y|--yes)
         YES="true"
-      ;;
-    -h|--api-host)
-      API_HOST="$value"
       ;;
     -g|--gen-certs)
         GENERATE_CERTS="true"
