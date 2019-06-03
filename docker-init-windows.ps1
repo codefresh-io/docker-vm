@@ -67,6 +67,7 @@ do
       ;;
     -h|--api-host)
       API_HOST="$value"
+      shift
       ;;
     -g|--gen-certs)
         GENERATE_CERTS="true"
