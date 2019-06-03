@@ -1,4 +1,3 @@
-<powershell>
 param (
   [Parameter(Mandatory=$true)][string]$token,
   [Parameter(Mandatory=$true)][string]$dns_name,
@@ -49,7 +48,7 @@ Please ensure:
 
 " 
 
-API_HOST=https://g.codefresh.io/api/nodes
+API_HOST=${API_HOST:-https://g.codefresh.io/api/nodes}
 
 #---
 fatal() {
@@ -57,7 +56,7 @@ fatal() {
    exit 1
 }
 
-while [[ $1 =~ ^(-(g|t|y)|--(gen-certs|token|yes|ip|iface|dns-name|install|no-install|restart|no-restart)) ]]
+while [[ $1 =~ ^(-(h|g|t|y)|--(gen-certs|token|yes|ip|iface|dns-name|install|no-install|restart|no-restart)) ]]
 do
   key=$1
   value=$2
@@ -65,6 +64,9 @@ do
   case $key in
     -y|--yes)
         YES="true"
+      ;;
+    -h|--api-host)
+      API_HOST="$value"
       ;;
     -g|--gen-certs)
         GENERATE_CERTS="true"
@@ -338,4 +340,3 @@ Write-Host 'Running the node installation shell script...';
 C:\cygwin64\bin\bash -l -c "sed -i 's/\r$//' $script_path" # necessary for cygwin
 Write-Host "Passing control to bash, command is C:\cygwin64\bin\bash -l -c '$script_path $token $ip $dns_name'";
 C:\cygwin64\bin\bash -l -c "$script_path --token $token --ip $ip --dns-name $dns_name"
-</powershell>
