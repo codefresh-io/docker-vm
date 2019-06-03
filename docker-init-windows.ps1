@@ -1,4 +1,5 @@
 param (
+  [Parameter(Mandatory=$true)][string]$api_host,
   [Parameter(Mandatory=$true)][string]$token,
   [Parameter(Mandatory=$true)][string]$dns_name,
   [Parameter(Mandatory=$true)][string]$ip
@@ -54,7 +55,7 @@ Please ensure:
 
 " 
 
-API_HOST=https://g.codefresh.io/api/nodes
+API_HOST=${API_HOST:-https://g.codefresh.io/api/nodes}
 
 #---
 fatal() {
@@ -345,5 +346,5 @@ echo -e "\n------------------\nRegistering Docker node ... "
 Write-Host 'Running the node installation shell script...';
 
 C:\cygwin64\bin\bash -l -c "sed -i 's/\r$//' $script_path" # necessary for cygwin
-Write-Host "Passing control to bash, command is C:\cygwin64\bin\bash -l -c '$script_path $token $ip $dns_name'";
-C:\cygwin64\bin\bash -l -c "$script_path --token $token --ip $ip --dns-name $dns_name"
+Write-Host "Passing control to bash, command is C:\cygwin64\bin\bash -l -c '$script_path --token $token --ip $ip --dns-name $dns_name'";
+C:\cygwin64\bin\bash -l -c "$script_path --api-host $api_host --token $token --ip $ip --dns-name $dns_name"
