@@ -63,7 +63,7 @@ fatal() {
    exit 1
 }
 
-while [[ $1 =~ ^(-(g|t|y)|--(gen-certs|token|yes|ip|iface|dns-name|install|no-install|restart|no-restart)) ]]
+while [[ $1 =~ ^(-(h|g|t|y)|--(api-host|gen-certs|token|yes|ip|iface|dns-name|install|no-install|restart|no-restart)) ]]
 do
   key=$1
   value=$2
