@@ -23,6 +23,9 @@ ElseIf ($disksCount -eq 1) {
   New-Partition -DiskNumber 1 -UseMaximumSize -AssignDriveLetter | Format-Volume -NewFileSystemLabel "Drive" -FileSystem NTFS
 }
 
+Write-Host "`nAdding Docker image cleaner task...`n";
+Schtasks /create /tn "Docker image cleaner" /sc daily /st 05:00 /tr "PowerShell docker image prune -a -f --filter until=24h --filter 'label!=owner=codefresh.io'"
+
 $release_id = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').ReleaseId
 $script_path = ($pwd.Path + '\cloud-init.sh').Replace('\', '/');
 
