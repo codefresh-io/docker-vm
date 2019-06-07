@@ -5,43 +5,25 @@ param (
   [Parameter(Mandatory=$true)][string]$ip
 )
 
+Update-StorageProviderCache -DiscoveryLevel Full
 $offlineDisks =  Get-Disk | Where-Object PartitionStyle -Eq 'RAW'
 $disksCount = $offlineDisks.Number.Count
-if ($disksCount -gt 1) {
+$docker_root = "D:/docker"
+
+if (($disksCount -eq 0) -and (!(Test-Path D:))) {$dockerRoot = "C:/ProgramData/docker"}
+Elseif ($disksCount -gt 1) {
   $PhysicalDisks = Get-StorageSubSystem -FriendlyName "Windows Storage*" | Get-PhysicalDisk -CanPool $True
   New-StoragePool -FriendlyName CodefreshData -StorageSubsystemFriendlyName "Windows Storage*" -PhysicalDisks $PhysicalDisks
   $allowedDiskSize = (Get-StoragePool -isPrimordial $False).Size
   New-VirtualDisk -FriendlyName CodefreshVirtualDisk -Size $allowedDiskSize -StoragePoolFriendlyName CodefreshData -ProvisioningType Thin
   Initialize-Disk -VirtualDisk (Get-VirtualDisk -FriendlyName CodefreshVirtualDisk) -passthru | New-Partition -AssignDriveLetter -UseMaximumSize | Format-Volume
-} else {
-foreach ($disk in $offlineDisks) {
-    Initialize-Disk -Number $disk.Number -PartitionStyle MBR
-    New-Partition -DiskNumber $disk.Number -UseMaximumSize -AssignDriveLetter | Format-Volume -NewFileSystemLabel "Drive" -FileSystem NTFS
-  }
+} 
+ElseIf ($disksCount -eq 1) {
+  Initialize-Disk -Number 1 -PartitionStyle MBR
+  New-Partition -DiskNumber 1 -UseMaximumSize -AssignDriveLetter | Format-Volume -NewFileSystemLabel "Drive" -FileSystem NTFS
 }
 
-Write-Host "`nStarting Codefresh node installation...`n";
-
-$url = 'https://cygwin.com/setup-x86_64.exe';
-
-Write-Host "`nInstalling Cygwin...";
-
-Invoke-WebRequest -Uri $url -OutFile 'C:/setup-x86_64.exe';
-New-Item -ItemType directory -Path 'C:/tmp';
-
-Start-Process "C:/setup-x86_64.exe" -NoNewWindow -Wait -PassThru -ArgumentList @('-q','-v','-n','-B','-R','C:/cygwin64','-l','C:/tmp','-s','http://ctm.crouchingtigerhiddenfruitbat.org/pub/cygwin/circa/64bit/2019/03/06/161558','-X','-P','default,curl,openssl,unzip,procps');
-
-Remove-Item -Path 'C:/tmp' -Force -Recurse -ErrorAction Ignore;
-Start-Process "C:/cygwin64/bin/cygcheck.exe" -NoNewWindow -Wait -PassThru -ArgumentList @('-c');
-
-Write-Host "`nFinished installing Cygwin...";
-
-Write-Host 'Opening a local firewall port for the dockerd...';
-  netsh advfirewall firewall add rule name="DockerD 2376" dir=in action=allow protocol=TCP localport=2376;
-
-  Write-Host 'Disabling Windows-Defender...';
-Uninstall-WindowsFeature -Name Windows-Defender
-
+$release_id = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').ReleaseId
 $script_path = ($pwd.Path + '\cloud-init.sh').Replace('\', '/');
 
 $script_contents = @'
@@ -63,7 +45,7 @@ fatal() {
    exit 1
 }
 
-while [[ $1 =~ ^(-(h|g|t|y)|--(api-host|gen-certs|token|yes|ip|iface|dns-name|install|no-install|restart|no-restart)) ]]
+while [[ $1 =~ ^(-(h|g|t|y)|--(api-host|gen-certs|release-id|docker-root|token|yes|ip|iface|dns-name|install|no-install|restart|no-restart)) ]]
 do
   key=$1
   value=$2
@@ -86,6 +68,14 @@ do
     --ip)
         ## IP Address
         IP="$value"
+        shift
+      ;;
+    --docker-root)
+        DOCKER_ROOT="$value"
+        shift
+      ;;
+    --release-id)
+        RELEASE_ID="$value"
         shift
       ;;
     --iface)
@@ -262,7 +252,7 @@ fi
 
     echo "--- Configuring the docker daemon..."
     
-    DOCKERD_CFG="{\"hosts\":[\"tcp://0.0.0.0:2376\",\"npipe:////./pipe/codefresh/docker_engine\",\"npipe://\"],\"tlsverify\":true,\"tlscacert\":\"C:/cygwin64/etc/ssl/codefresh/cf-ca.pem\",\"tlscert\":\"C:/cygwin64/etc/ssl/codefresh/cf-server-cert.pem\",\"tlskey\":\"C:/cygwin64/etc/ssl/codefresh/cf-server-key.pem\",\"graph\":\"D:/\"}"
+    DOCKERD_CFG="{\"hosts\":[\"tcp://0.0.0.0:2376\",\"npipe:////./pipe/codefresh/docker_engine\",\"npipe://\"],\"tlsverify\":true,\"tlscacert\":\"C:/cygwin64/etc/ssl/codefresh/cf-ca.pem\",\"tlscert\":\"C:/cygwin64/etc/ssl/codefresh/cf-server-cert.pem\",\"tlskey\":\"C:/cygwin64/etc/ssl/codefresh/cf-server-key.pem\",\"graph\":\"$DOCKER_ROOT\"}"
 
     mkdir C:/ProgramData/Docker/ 2>/dev/null
     mkdir C:/ProgramData/Docker/config 2>/dev/null
@@ -281,14 +271,14 @@ fi
 fi
 
     echo "clonning images"
-    docker pull codefresh/cf-container-logger:windows-1809
-    docker pull codefresh/cf-docker-pusher:windows-1809
-    docker pull codefresh/cf-docker-puller:windows-1809
-    docker pull codefresh/cf-docker-builder:windows-1809
-    docker pull codefresh/cf-git-cloner:windows-1809
-    docker pull codefresh/cf-compose:windows-1809
-    docker pull codefresh/cf-deploy-kubernetes:windows-1809
-    docker pull codefresh/fs-ops:windows-1809
+    docker pull codefresh/cf-container-logger:windows-$RELEASE_ID
+    docker pull codefresh/cf-docker-pusher:windows-$RELEASE_ID
+    docker pull codefresh/cf-docker-puller:windows-$RELEASE_ID
+    docker pull codefresh/cf-docker-builder:windows-$RELEASE_ID
+    docker pull codefresh/cf-git-cloner:windows-$RELEASE_ID
+    docker pull codefresh/cf-compose:windows-$RELEASE_ID
+    docker pull codefresh/cf-deploy-kubernetes:windows-$RELEASE_ID
+    docker pull codefresh/fs-ops:windows-$RELEASE_ID
 
 
 echo -e "\n------------------\nRegistering Docker node ... "
@@ -346,5 +336,5 @@ echo -e "\n------------------\nRegistering Docker node ... "
 Write-Host 'Running the node installation shell script...';
 
 C:\cygwin64\bin\bash -l -c "sed -i 's/\r$//' $script_path" # necessary for cygwin
-Write-Host "Passing control to bash, command is C:\cygwin64\bin\bash -l -c '$script_path --token $token --ip $ip --dns-name $dns_name'";
-C:\cygwin64\bin\bash -l -c "$script_path --api-host $api_host --token $token --ip $ip --dns-name $dns_name"
+Write-Host "Passing control to bash, command is C:\cygwin64\bin\bash -l -c '$script_path --token $token --ip $ip --dns-name $dns_name --docker-root $docker_root --release-id $release_id'";
+C:\cygwin64\bin\bash -l -c "$script_path --api-host $api_host --token $token --ip $ip --dns-name $dns_name --docker-root $docker_root --release-id $release_id"
