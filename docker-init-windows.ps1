@@ -25,6 +25,7 @@ ElseIf ($disksCount -eq 1) {
 
 Write-Host "`nAdding Docker image cleaner task...`n";
 Schtasks /create /tn "Docker image cleaner" /sc daily /st 05:00 /tr "PowerShell docker image prune -a -f --filter until=24h --filter 'label!=owner=codefresh.io'"
+Schtasks /create /tn "Reboot the node (workadound for a Microsoft bug SAAS-3209)" /sc daily /st 04:30 /tr "PowerShell shutdown -r -f -t 0"
 
 $release_id = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').ReleaseId
 $script_path = ($pwd.Path + '\cloud-init.sh').Replace('\', '/');
