@@ -23,10 +23,6 @@ ElseIf ($disksCount -eq 1) {
   New-Partition -DiskNumber 1 -UseMaximumSize -AssignDriveLetter | Format-Volume -NewFileSystemLabel "Drive" -FileSystem NTFS
 }
 
-Write-Host "`nAdding Docker image cleaner task...`n";
-Schtasks /create /tn "Docker image cleaner" /sc daily /st 05:00 /tr "PowerShell docker image prune -a -f --filter until=24h --filter 'label!=owner=codefresh.io'"
-Schtasks /create /tn "Reboot the node (workadound for a Microsoft bug SAAS-3209)" /sc daily /st 04:30 /tr "PowerShell shutdown -r -f -t 0"
-
 $release_id = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').ReleaseId
 $script_path = ($pwd.Path + '\cloud-init.sh').Replace('\', '/');
 
@@ -342,3 +338,153 @@ Write-Host 'Running the node installation shell script...';
 C:\cygwin64\bin\bash -l -c "sed -i 's/\r$//' $script_path" # necessary for cygwin
 Write-Host "Passing control to bash, command is C:\cygwin64\bin\bash -l -c '$script_path --token $token --ip $ip --dns-name $dns_name --docker-root $docker_root --release-id $release_id'";
 C:\cygwin64\bin\bash -l -c "$script_path --api-host $api_host --token $token --ip $ip --dns-name $dns_name --docker-root $docker_root --release-id $release_id"
+
+#--------- Creating Maintenance Tasks --------------------
+
+$tasksFolder = "C:\cf-maintenance-tasks"
+$logsFolder = "$tasksFolder\logs"
+mkdir $tasksFolder 2> $null
+mkdir $logsFolder 2> $null
+
+function createCacheCleanTask() {
+  $cacheCleanerScript_name = "$tasksFolder\cleanCache.ps1"
+  $cacheCleanerScriptLog_name = "cleanCache.log"
+
+  $cacheCleanerScript_contents = '
+  $keptImagesNumber = 100
+  $allImages = $(docker images --format "{{.Repository}}:{{.Tag}}")
+  $cfImages = $(docker images --format "{{.Repository}}:{{.Tag}}" --filter label=owner=codefresh.io)
+
+  if ($allImages.count -gt $keptImagesNumber) {
+    $imagesToDelete = $($allImages[-$($allImages.count-$keptImagesNumber)..-1] | ? {$_ -notin $cfImages} )
+    $imagesToDelete += $(docker images -f "dangling=true")
+    if ($imagesToDelete) {
+      $cleanedImages = New-Object System.Collections.ArrayList
+      foreach ($image in $imagesToDelete) {
+        $cleanedImages += $(docker rmi -f $image 2> $null)
+      }
+      $cleanedImages = $cleanedImages.Count
+      $allImages = $(docker images).Count
+      echo "$(Get-Date) $cleanedImages images cleaned, $allImages images left"
+    } 
+  } else {
+      echo "$(Get-Date) Nothing to clean, idling..."
+  }'
+  
+  Write-Host "`nAdding Docker image cleaner task...`n";
+  [IO.File]::WriteAllLines($cacheCleanerScript_name, $cacheCleanerScript_contents);
+  Schtasks /create /f /ru "SYSTEM" /tn "Docker image cleaner" /sc hourly /mo 1 /tr "PowerShell $cacheCleanerScript_name >> $logsFolder\`$(Get-Date` -Format` `"MM-dd-yyyy`")_$cacheCleanerScriptLog_name"
+}
+
+function createRebootNodeTask() {
+  Write-Host "`nAdding Reboot Node task...`n";
+
+  $rebootNodeScript_name = "$tasksFolder\rebootNode.ps1"
+  $rebootNodeScriptLog_path = "$tasksFolder\logs"
+  $rebootNodeScriptLog_name = "rebootNode.log"
+
+  $rebootNodeScript_contents = '
+  $freeRamThreshold = 50
+    
+  if (!$token) {
+    echo "$(Get-Date) The api token has not been provided, exiting..."
+    exit 1
+  }
+
+  function getNodeId() {
+    $publicIp = (Invoke-WebRequest -UseBasicParsing "http://ifconfig.me/ip").Content
+
+    if (!$publicIp) {
+        echo "$(Get-Date) Failed to get node public IP, exiting..."
+        exit 1
+    }
+
+    $response = $(Invoke-WebRequest -UseBasicParsing -Headers @{"Authorization"="$token"} "https://g.codefresh.io/api/admin/nodes")
+    if ($response.StatusCode -eq 401) {
+      echo "The authorization token is expired or invalid, exiting..."
+      exit 1
+    }
+
+    $nodeId = ($response.Content | ConvertFrom-Json) | Where-Object ip -eq $publicIp | Select-Object -ExpandProperty id
+    
+    if (!$nodeId) {
+      echo "$(Get-Date) Failed to get node id"
+      exit 1
+    }
+
+    return $nodeId
+  }
+
+  function pauseNode() {
+      $response = $(Invoke-WebRequest -UseBasicParsing -Headers @{"Authorization"="$token"} "https://g.codefresh.io/api/admin/nodes/pause?id=$nodeId")
+      if ($response.StatusCode -ne 200) {
+        echo "$(Get-Date) Failed to pause the node: $response"
+      } else {
+          echo "$(Get-Date) The node has been successfully paused..."
+      }
+  }
+
+  function unPauseNode() {
+      $response = $(Invoke-WebRequest -UseBasicParsing -Headers @{"Authorization"="$token"} "https://g.codefresh.io/api/admin/nodes/unpause?id=$nodeId")
+      if ($response.StatusCode -ne 200) {
+          echo "$(Get-Date) Failed to unpause the node: $response"
+      } else {
+          echo "$(Get-Date) The node has been successfully unpaused..."
+      }
+  }
+
+  function getFreeMemory() {
+      $os = Get-Ciminstance Win32_OperatingSystem
+      $freeRam = [math]::Round(($os.FreePhysicalMemory/$os.TotalVisibleMemorySize)*100,2)
+      return $freeRam
+  }
+
+  function waitWorkflow() {
+      echo "$(Get-Date) Starting to wait until the running workflow is finished..."
+      $timeout = new-timespan -Minutes 60
+      $sw = [diagnostics.stopwatch]::StartNew()
+
+      while ($sw.elapsed -lt $timeout){
+          $containersRunning = $(docker ps -q)
+          if (!$containersRunning) {
+              echo "$(Get-Date) No containers running, breaking"
+              return
+          }
+        echo "$(Get-Date) Containers are still running, keep waiting..."
+          Start-Sleep 120
+      }
+      echo "$(Get-Date) Timeout occurred, all running containers are considered stuck, proceeding..."
+  }
+  
+  $truncateLogsScript_name
+
+  echo "`n------------------------------------------`n`n$(Get-Date) Starting the task loop..."
+
+  $nodeId = getNodeId
+  unPauseNode
+
+  while ($true) {
+    $freeRam = getFreeMemory
+    if ($freeRam -lt $freeRamThreshold) {
+        echo "$(Get-Date) Free RAM is $freeRam%, threshold has been reached, initiating node reboot procedure..."
+    
+        pauseNode
+        waitWorkflow
+
+        echo "$(Get-Date) Cleaning stuck loggers and rebooting the node..."
+        docker rm -f $(docker ps -aq)
+        shutdown -r -f -t 0
+    } else {
+      echo "$(Get-Date) Free RAM is $freeRam%, idling..."
+    }
+    Start-Sleep 120
+  }'
+
+  $rebootNodeScript_contents = "`$token = `$(cat $tasksFolder\key)" + "`n$rebootNodeScript_contents"
+
+  [IO.File]::WriteAllLines($rebootNodeScript_name, $rebootNodeScript_contents);
+  Schtasks /create /f /ru "SYSTEM" /tn "Reboot the node (workaround for a Microsoft bug SAAS-3209)" /sc onstart /tr "PowerShell $rebootNodeScript_name >> $logsFolder\`$(Get-Date` -Format` `"MM-dd-yyyy`")_$rebootNodeScriptLog_name"
+  }
+
+createCacheCleanTask
+createRebootNodeTask
