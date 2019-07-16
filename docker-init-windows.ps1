@@ -351,21 +351,21 @@ function createCacheCleanTask() {
   $cacheCleanerScriptLog_name = "cleanCache.log"
 
   $cacheCleanerScript_contents = '
-  $keptImagesNumber = 100
+  $keptImagesNumber = 50
   $allImages = $(docker images --format "{{.Repository}}:{{.Tag}}")
   $cfImages = $(docker images --format "{{.Repository}}:{{.Tag}}" --filter label=owner=codefresh.io)
 
-  if ($allImages.count -gt $keptImagesNumber) {
+  if ($allImages.count-$cfImages.count -gt $keptImagesNumber) {
     $imagesToDelete = $($allImages[-$($allImages.count-$keptImagesNumber)..-1] | ? {$_ -notin $cfImages} )
-    $imagesToDelete += $(docker images -f "dangling=true")
+    [string[]]$imagesToDelete += $(docker images -q -f "dangling=true")
     if ($imagesToDelete) {
-      $cleanedImages = New-Object System.Collections.ArrayList
       foreach ($image in $imagesToDelete) {
-        $cleanedImages += $(docker rmi -f $image 2> $null)
+        docker rmi -f $image 2> $null
       }
-      $cleanedImages = $cleanedImages.Count
-      $allImages = $(docker images).Count
-      echo "$(Get-Date) $cleanedImages images cleaned, $allImages images left"
+      [string[]]$allImages += $(docker images -q -f "dangling=true")
+      $leftImages = $(docker images).count
+      $cleanedImages = $allImages.count - $leftImages
+      echo "$(Get-Date) $cleanedImages images cleaned, $leftImages images left"
     } 
   } else {
       echo "$(Get-Date) Nothing to clean, idling..."
@@ -373,7 +373,39 @@ function createCacheCleanTask() {
   
   Write-Host "`nAdding Docker image cleaner task...`n";
   [IO.File]::WriteAllLines($cacheCleanerScript_name, $cacheCleanerScript_contents);
-  Schtasks /create /f /ru "SYSTEM" /tn "Docker image cleaner" /sc hourly /mo 1 /tr "PowerShell $cacheCleanerScript_name >> $logsFolder\`$(Get-Date` -Format` `"MM-dd-yyyy`")_$cacheCleanerScriptLog_name"
+  mkdir "$logsFolder\docker_cache_cleaner" 2> $null
+  Schtasks /create /f /ru "SYSTEM" /tn "Docker image cleaner" /sc hourly /mo 1 /tr "PowerShell $cacheCleanerScript_name >> $logsFolder\docker_cache_cleaner\`$(Get-Date` -Format` `"MM-dd-yyyy`")_$cacheCleanerScriptLog_name"
+}
+
+function createCleanRAMTask() {
+  Write-Host "`nAdding RAM cleaner task...`n";
+
+  $clearRAMLog_name = "$tasksFolder\clearRAM.log"
+  $clearRAMScript_name = "$tasksFolder\clearRAM.ps1"
+  $cleanRAMLog_name = "clearRAM.log"
+
+  $clearRAMScript_contents = "
+  echo `"`$(Get-Date) Starting Paged Pool memory cleaning...`"
+  $tasksFolder\clearRAM.exe workingsets; Start-Sleep 120
+  $tasksFolder\clearRAM.exe modifiedpagelist; Start-Sleep 120
+  echo `"`$(Get-Date) Paged Pool memory has been dropped to the PageFile successfully`""
+
+  function getCleanerBinary() {
+    
+    $cleanRAMImage = "codefresh/win-maintainance:$release_id"
+
+    docker pull $cleanRAMImage
+    docker create --name tmp $cleanRAMImage
+    docker cp tmp:C:\clearRAM.exe "$tasksFolder\"
+    docker rm tmp
+
+  }
+
+  getCleanerBinary 1> $null
+  [IO.File]::WriteAllLines($clearRAMScript_name, $clearRAMScript_contents);
+  mkdir $logsFolder\paged_pool_memory_cleaner 2> $null
+  Schtasks /create /f /ru "SYSTEM" /tn "Clean RAM (workaround for a Microsoft bug SAAS-3209)" /sc minute /mo 5 /tr "PowerShell $clearRAMScript_name >> $logsFolder\paged_pool_memory_cleaner\`$(Get-Date` -Format` `"MM-dd-yyyy`")_$cleanRAMLog_name"
+
 }
 
 function createRebootNodeTask() {
@@ -384,8 +416,8 @@ function createRebootNodeTask() {
   $rebootNodeScriptLog_name = "rebootNode.log"
 
   $rebootNodeScript_contents = '
-  $freeRamThreshold = 50
-    
+  $freeRamThreshold = 30
+
   if (!$token) {
     echo "$(Get-Date) The api token has not been provided, exiting..."
     exit 1
@@ -421,6 +453,7 @@ function createRebootNodeTask() {
         echo "$(Get-Date) Failed to pause the node: $response"
       } else {
           echo "$(Get-Date) The node has been successfully paused..."
+          Start-Sleep 30
       }
   }
 
@@ -450,41 +483,56 @@ function createRebootNodeTask() {
               echo "$(Get-Date) No containers running, breaking"
               return
           }
-        echo "$(Get-Date) Containers are still running, keep waiting..."
-          Start-Sleep 120
+          echo "$(Get-Date) Containers are still running, keep waiting; free memory is $(getFreeMemory)%..."
+          Start-Sleep 60
       }
       echo "$(Get-Date) Timeout occurred, all running containers are considered stuck, proceeding..."
   }
-  
-  $truncateLogsScript_name
 
+  function executeRebootProcedure() {
+      pauseNode
+      waitWorkflow
+      echo "$(Get-Date) Waiting for the post steps..."
+      Start-Sleep 30
+      echo "$(Get-Date) Rebooting the node..."
+      docker rm -f $(docker ps -aq)
+      shutdown -r -f -t 0
+  }
+  
   echo "`n------------------------------------------`n`n$(Get-Date) Starting the task loop..."
 
   $nodeId = getNodeId
+  
+  $rebootOnce = $args[0]
+  if ($rebootOnce -eq "once") {
+    echo "$(Get-Date) Initiating scheduled reboot..."
+    executeRebootProcedure
+  } 
+
   unPauseNode
 
+  # watch free memory in the loop and reboot if the threshold is reached
   while ($true) {
     $freeRam = getFreeMemory
     if ($freeRam -lt $freeRamThreshold) {
         echo "$(Get-Date) Free RAM is $freeRam%, threshold has been reached, initiating node reboot procedure..."
-    
-        pauseNode
-        waitWorkflow
-
-        echo "$(Get-Date) Cleaning stuck loggers and rebooting the node..."
-        docker rm -f $(docker ps -aq)
-        shutdown -r -f -t 0
+        executeRebootProcedure
     } else {
       echo "$(Get-Date) Free RAM is $freeRam%, idling..."
+      Start-Sleep 120
     }
-    Start-Sleep 120
   }'
 
   $rebootNodeScript_contents = "`$token = `$(cat $tasksFolder\key)" + "`n$rebootNodeScript_contents"
 
   [IO.File]::WriteAllLines($rebootNodeScript_name, $rebootNodeScript_contents);
-  Schtasks /create /f /ru "SYSTEM" /tn "Reboot the node (workaround for a Microsoft bug SAAS-3209)" /sc onstart /tr "PowerShell $rebootNodeScript_name >> $logsFolder\`$(Get-Date` -Format` `"MM-dd-yyyy`")_$rebootNodeScriptLog_name"
-  }
+  mkdir "$logsFolder\reboots_daily" 2> $null
+  mkdir "$logsFolder\reboots_free_ram_threshold" 2> $null
+  Schtasks /create /f /ru "SYSTEM" /tn "Reboot once a day (workaround for a Microsoft bug SAAS-3209)" /sc daily /st 04:30 /tr "PowerShell $rebootNodeScript_name` once >> $logsFolder\reboots_daily\`$(Get-Date` -Format` `"MM-dd-yyyy`")_$rebootNodeScriptLog_name"
+  Schtasks /create /f /ru "SYSTEM" /tn "Reboot on exceeding free RAM threshold (workaround for a Microsoft bug SAAS-3209)" /sc onstart /tr "PowerShell $rebootNodeScript_name >> $logsFolder\reboots_free_ram_threshold\`$(Get-Date` -Format` `"MM-dd-yyyy`")_$rebootNodeScriptLog_name"
+  Get-Scheduledtask -Taskname "Reboot on exceeding*" | Start-ScheduledTask
+}
 
 createCacheCleanTask
+createCleanRAMTask
 createRebootNodeTask
