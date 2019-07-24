@@ -357,7 +357,7 @@ function createCacheCleanTask() {
 
   if ($allImages.count-$cfImages.count -gt $keptImagesNumber) {
     $imagesToDelete = $($allImages[-$($allImages.count-$keptImagesNumber)..-1] | ? {$_ -notin $cfImages} )
-    [string[]]$imagesToDelete += $(docker images -q -f "dangling=true")
+    [string[]]$imagesToDelete += $(docker images -q -f "dangling=true" -f "before=$($allImages[$allImages.count-$keptImagesNumber])")
     if ($imagesToDelete) {
       foreach ($image in $imagesToDelete) {
         docker rmi -f $image 2> $null
