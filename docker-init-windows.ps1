@@ -341,13 +341,13 @@ C:\cygwin64\bin\bash -l -c "$script_path --api-host $api_host --token $token --i
 
 #--------- Creating Maintenance Tasks --------------------
 
-$tasksFolder = "C:\cf-maintenance-tasks"
-$logsFolder = "$tasksFolder\logs"
+$tasksFolder = "C:/cf-maintenance-tasks"
+$logsFolder = "$tasksFolder/logs"
 mkdir $tasksFolder 2> $null
 mkdir $logsFolder 2> $null
 
 function createCacheCleanTask() {
-  $cacheCleanerScript_name = "$tasksFolder\cleanCache.ps1"
+  $cacheCleanerScript_name = "$tasksFolder/cleanCache.ps1"
   $cacheCleanerScriptLog_name = "cleanCache.log"
 
   $cacheCleanerScript_contents = '
@@ -373,21 +373,87 @@ function createCacheCleanTask() {
   
   Write-Host "`nAdding Docker image cleaner task...`n";
   [IO.File]::WriteAllLines($cacheCleanerScript_name, $cacheCleanerScript_contents);
-  mkdir "$logsFolder\docker_cache_cleaner" 2> $null
-  Schtasks /create /f /ru "SYSTEM" /tn "Docker image cleaner" /sc hourly /mo 1 /tr "PowerShell $cacheCleanerScript_name >> $logsFolder\docker_cache_cleaner\`$(Get-Date` -Format` `"MM-dd-yyyy`")_$cacheCleanerScriptLog_name"
+  mkdir "$logsFolder/docker_cache_cleaner" 2> $null
+  Schtasks /create /f /ru "SYSTEM" /tn "Docker image cleaner" /sc hourly /mo 1 /tr "PowerShell $cacheCleanerScript_name >> $logsFolder/docker_cache_cleaner/`$(Get-Date` -Format` `"MM-dd-yyyy`")_$cacheCleanerScriptLog_name"
+}
+
+function createCleanLoggersTask() {
+  $loggerCleanerScript_name = "$tasksFolder/loggers_cleaner.sh"
+  $loggerCleanerScript_logFolder = "$logsFolder/loggers_cleaner"
+
+  $loggerCleanerScript_contents = @'
+  #!/bin/bash
+
+  set -euo pipefail
+
+  # gets a container progressId label value
+  function getPID() {
+      echo $(docker inspect $1 --format='{{index .Config.Labels "io.codefresh.progressId"}}')
+  }
+
+  function findDanglingLoggers() {
+      local logger_containers=$(docker ps | grep cf-container-logger | egrep -v '(second|minute)s* ago' | awk '{print $1}')
+      local user_containers=$(docker ps | egrep -v cf-container-logger | tail -n +2 | awk '{print $1}')
+      
+      for l in $logger_containers; do
+          local l_pid=$(getPID $l)
+          local dangling="true"
+
+          for u in $user_containers; do
+              local u_pid=$(getPID $u)
+
+              if [[ "$l_pid" == "$u_pid" ]]; then
+                  dangling="false"
+                  break
+              fi
+          done
+
+          if [[ $dangling == "true" ]]; then
+              echo $l >> $dangling_loggers;
+          fi
+      done
+  }
+
+  # loops through all logger containers and tries to find
+  # user containers with matching progressId, if notthing found - marks logger as dangling
+  function cleanDanglingLoggers() {
+      echo -e "$(date +"%T") Looking for dangling logger containers...\n"
+
+      dangling_loggers=$(mktemp)
+      findDanglingLoggers
+
+      if [[ $(cat $dangling_loggers) ]]; then
+          echo -e "The following dangling logger containers will be cleaned:\n"
+          cat $dangling_loggers
+          for dl in $(cat $dangling_loggers); do
+              docker unpause $dl 2>/dev/null || true
+              docker rm -f $dl 1>/dev/null
+          done
+      else
+          echo -e "No dangling loggers found\n"
+      fi
+  }
+
+  cleanDanglingLoggers
+'@
+  
+  Write-Host "`nAdding loggers cleaner task...`n";
+  [IO.File]::WriteAllLines($loggerCleanerScript_name, $loggerCleanerScript_contents);
+  mkdir "$loggerCleanerScript_logFolder" 2> $null
+  Schtasks /create /f /ru "SYSTEM" /tn "Loggers cleaner" /sc hourly /mo 1 /tr "PowerShell -c 'C:\cygwin64\bin\bash.exe -o igncr -l -c $loggerCleanerScript_name' >> $loggerCleanerScript_logFolder/`$(Get-Date` -Format` `"MM-dd-yyyy`")_loggers_cleaner.log"
 }
 
 function createCleanRAMTask() {
   Write-Host "`nAdding RAM cleaner task...`n";
 
-  $clearRAMLog_name = "$tasksFolder\clearRAM.log"
-  $clearRAMScript_name = "$tasksFolder\clearRAM.ps1"
+  $clearRAMLog_name = "$tasksFolder/clearRAM.log"
+  $clearRAMScript_name = "$tasksFolder/clearRAM.ps1"
   $cleanRAMLog_name = "clearRAM.log"
 
   $clearRAMScript_contents = "
   echo `"`$(Get-Date) Starting Paged Pool memory cleaning...`"
-  $tasksFolder\clearRAM.exe workingsets; Start-Sleep 120
-  $tasksFolder\clearRAM.exe modifiedpagelist; Start-Sleep 120
+  $tasksFolder/clearRAM.exe workingsets; Start-Sleep 120
+  $tasksFolder/clearRAM.exe modifiedpagelist; Start-Sleep 120
   echo `"`$(Get-Date) Paged Pool memory has been dropped to the PageFile successfully`""
 
   function getCleanerBinary() {
@@ -396,23 +462,23 @@ function createCleanRAMTask() {
 
     docker pull $cleanRAMImage
     docker create --name tmp $cleanRAMImage
-    docker cp tmp:C:\clearRAM.exe "$tasksFolder\"
+    docker cp tmp:C:/clearRAM.exe "$tasksFolder/"
     docker rm tmp
 
   }
 
   getCleanerBinary 1> $null
   [IO.File]::WriteAllLines($clearRAMScript_name, $clearRAMScript_contents);
-  mkdir $logsFolder\paged_pool_memory_cleaner 2> $null
-  Schtasks /create /f /ru "SYSTEM" /tn "Clean RAM (workaround for a Microsoft bug SAAS-3209)" /sc minute /mo 5 /tr "PowerShell $clearRAMScript_name >> $logsFolder\paged_pool_memory_cleaner\`$(Get-Date` -Format` `"MM-dd-yyyy`")_$cleanRAMLog_name"
+  mkdir $logsFolder/paged_pool_memory_cleaner 2> $null
+  Schtasks /create /f /ru "SYSTEM" /tn "Clean RAM (workaround for a Microsoft bug SAAS-3209)" /sc minute /mo 5 /tr "PowerShell $clearRAMScript_name >> $logsFolder/paged_pool_memory_cleaner/`$(Get-Date` -Format` `"MM-dd-yyyy`")_$cleanRAMLog_name"
 
 }
 
 function createRebootNodeTask() {
   Write-Host "`nAdding Reboot Node task...`n";
 
-  $rebootNodeScript_name = "$tasksFolder\rebootNode.ps1"
-  $rebootNodeScriptLog_path = "$tasksFolder\logs"
+  $rebootNodeScript_name = "$tasksFolder/rebootNode.ps1"
+  $rebootNodeScriptLog_path = "$tasksFolder/logs"
   $rebootNodeScriptLog_name = "rebootNode.log"
 
   $rebootNodeScript_contents = '
@@ -523,16 +589,17 @@ function createRebootNodeTask() {
     }
   }'
 
-  $rebootNodeScript_contents = "`$token = `$(cat $tasksFolder\key)" + "`n$rebootNodeScript_contents"
+  $rebootNodeScript_contents = "`$token = `$(cat $tasksFolder/key)" + "`n$rebootNodeScript_contents"
 
   [IO.File]::WriteAllLines($rebootNodeScript_name, $rebootNodeScript_contents);
-  mkdir "$logsFolder\reboots_daily" 2> $null
-  mkdir "$logsFolder\reboots_free_ram_threshold" 2> $null
-  Schtasks /create /f /ru "SYSTEM" /tn "Reboot once a day (workaround for a Microsoft bug SAAS-3209)" /sc daily /st 04:30 /tr "PowerShell $rebootNodeScript_name` once >> $logsFolder\reboots_daily\`$(Get-Date` -Format` `"MM-dd-yyyy`")_$rebootNodeScriptLog_name"
-  Schtasks /create /f /ru "SYSTEM" /tn "Reboot on exceeding free RAM threshold (workaround for a Microsoft bug SAAS-3209)" /sc onstart /tr "PowerShell $rebootNodeScript_name >> $logsFolder\reboots_free_ram_threshold\`$(Get-Date` -Format` `"MM-dd-yyyy`")_$rebootNodeScriptLog_name"
+  mkdir "$logsFolder/reboots_daily" 2> $null
+  mkdir "$logsFolder/reboots_free_ram_threshold" 2> $null
+  Schtasks /create /f /ru "SYSTEM" /tn "Reboot once a day (workaround for a Microsoft bug SAAS-3209)" /sc daily /st 04:30 /tr "PowerShell $rebootNodeScript_name` once >> $logsFolder/reboots_daily/`$(Get-Date` -Format` `"MM-dd-yyyy`")_$rebootNodeScriptLog_name"
+  Schtasks /create /f /ru "SYSTEM" /tn "Reboot on exceeding free RAM threshold (workaround for a Microsoft bug SAAS-3209)" /sc onstart /tr "PowerShell $rebootNodeScript_name >> $logsFolder/reboots_free_ram_threshold/`$(Get-Date` -Format` `"MM-dd-yyyy`")_$rebootNodeScriptLog_name"
   Get-Scheduledtask -Taskname "Reboot on exceeding*" | Start-ScheduledTask
 }
 
 createCacheCleanTask
+createCleanLoggersTask
 createCleanRAMTask
 createRebootNodeTask
