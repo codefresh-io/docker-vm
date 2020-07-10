@@ -316,13 +316,13 @@ function pullCFRuntimeImages() {
 }
 
 function createMaintenanceTasks() {
-    $tasksFolder = "C:\cf-maintenance-tasks"
-    $logsFolder = "$tasksFolder\logs"
+    $tasksFolder = "C:/cf-maintenance-tasks"
+    $logsFolder = "$tasksFolder/logs"
     mkdir $tasksFolder 2> $null
     mkdir $logsFolder 2> $null
 
     function createCacheCleanTask() {
-        $cacheCleanerScript_name = "$tasksFolder\cleanCache.ps1"
+        $cacheCleanerScript_name = "$tasksFolder/cleanCache.ps1"
         $cacheCleanerScriptLog_name = "cleanCache.log"
 
         $cacheCleanerScript_contents = '
@@ -348,11 +348,78 @@ function createMaintenanceTasks() {
         
         Write-Host "`nAdding Docker cache cleaner task...`n";
         [IO.File]::WriteAllLines($cacheCleanerScript_name, $cacheCleanerScript_contents);
-        mkdir "$logsFolder\docker_cache_cleaner" 2> $null
-        Schtasks /create /f /ru "SYSTEM" /tn "Docker cache cleaner" /sc hourly /mo 1 /tr "PowerShell $cacheCleanerScript_name >> $logsFolder\docker_cache_cleaner\`$(Get-Date` -Format` `"MM-dd-yyyy`")_$cacheCleanerScriptLog_name"
+        mkdir "$logsFolder/docker_cache_cleaner" 2> $null
+        Schtasks /create /f /ru "SYSTEM" /tn "Docker cache cleaner" /sc hourly /mo 1 /tr "PowerShell $cacheCleanerScript_name >> $logsFolder/docker_cache_cleaner/`$(Get-Date` -Format` `"MM-dd-yyyy`")_$cacheCleanerScriptLog_name"
+    }
+
+    function createCleanLoggersTask() {
+        $loggerCleanerScript_name = "$tasksFolder/loggers_cleaner.sh"
+        $loggerCleanerScript_logFolder = "$logsFolder/loggers_cleaner"
+
+        $loggerCleanerScript_contents = @'
+        #!/bin/bash
+
+        set -euo pipefail
+
+        # gets a container progressId label value
+        function getPID() {
+            echo $(docker inspect $1 --format='{{index .Config.Labels "io.codefresh.progressId"}}')
+        }
+
+        function findDanglingLoggers() {
+            local logger_containers=$(docker ps | grep cf-container-logger | egrep -v '(second|minute)s* ago' | awk '{print $1}')
+            local user_containers=$(docker ps | egrep -v cf-container-logger | tail -n +2 | awk '{print $1}')
+            
+            for l in $logger_containers; do
+                local l_pid=$(getPID $l)
+                local dangling="true"
+
+                for u in $user_containers; do
+                    local u_pid=$(getPID $u)
+
+                    if [[ "$l_pid" == "$u_pid" ]]; then
+                        dangling="false"
+                        break
+                    fi
+                done
+
+                if [[ $dangling == "true" ]]; then
+                    echo $l >> $dangling_loggers;
+                fi
+            done
+        }
+
+        # loops through all logger containers and tries to find
+        # user containers with matching progressId, if notthing found - marks logger as dangling
+        function cleanDanglingLoggers() {
+            echo -e "$(date +"%T") Looking for dangling logger containers...\n"
+
+            dangling_loggers=$(mktemp)
+            findDanglingLoggers
+
+            if [[ $(cat $dangling_loggers) ]]; then
+                echo -e "The following dangling logger containers will be cleaned:\n"
+                cat $dangling_loggers
+                for dl in $(cat $dangling_loggers); do
+                    docker unpause $dl 2>/dev/null || true
+                    docker rm -f $dl 1>/dev/null
+                done
+            else
+                echo -e "No dangling loggers found\n"
+            fi
+        }
+
+        cleanDanglingLoggers
+'@
+      
+        Write-Host "`nAdding loggers cleaner task...`n";
+        [IO.File]::WriteAllLines($loggerCleanerScript_name, $loggerCleanerScript_contents);
+        mkdir "$loggerCleanerScript_logFolder" 2> $null
+        Schtasks /create /f /ru "SYSTEM" /tn "Loggers cleaner" /sc hourly /mo 1 /tr "PowerShell -c 'C:\cygwin64\bin\bash.exe -o igncr -l -c $loggerCleanerScript_name' >> $loggerCleanerScript_logFolder/`$(Get-Date` -Format` `"MM-dd-yyyy`")_loggers_cleaner.log"
     }
 
     createCacheCleanTask
+    createCleanLoggersTask
 }
 
 function configureNode() {
