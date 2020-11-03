@@ -305,14 +305,14 @@ function ensureDaemonCertsACL() {
 function pullCFRuntimeImages() {
     Write-Host "Pulling runtime images corresponding to release $release_id`n" -ForegroundColor Yellow
 
-    docker pull codefresh/cf-container-logger:windows-$release_id
-    docker pull codefresh/cf-docker-pusher:windows-$release_id
-    docker pull codefresh/cf-docker-puller:windows-$release_id
-    docker pull codefresh/cf-docker-builder:windows-$release_id
-    docker pull codefresh/cf-git-cloner:windows-$release_id
-    docker pull codefresh/cf-compose:windows-$release_id
-    docker pull codefresh/cf-deploy-kubernetes:windows-$release_id
-    docker pull codefresh/fs-ops:windows-$release_id
+    docker pull quay.io/codefresh/cf-container-logger:windows-$release_id
+    docker pull quay.io/codefresh/cf-docker-pusher:windows-$release_id
+    docker pull quay.io/codefresh/cf-docker-puller:windows-$release_id
+    docker pull quay.io/codefresh/cf-docker-builder:windows-$release_id
+    docker pull quay.io/codefresh/cf-git-cloner:windows-$release_id
+    docker pull quay.io/codefresh/cf-compose:windows-$release_id
+    docker pull quay.io/codefresh/cf-deploy-kubernetes:windows-$release_id
+    docker pull quay.io/codefresh/fs-ops:windows-$release_id
 }
 
 function createMaintenanceTasks() {

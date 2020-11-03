@@ -271,14 +271,14 @@ fi
 fi
 
     echo "clonning images"
-    docker pull codefresh/cf-container-logger:windows-$RELEASE_ID
-    docker pull codefresh/cf-docker-pusher:windows-$RELEASE_ID
-    docker pull codefresh/cf-docker-puller:windows-$RELEASE_ID
-    docker pull codefresh/cf-docker-builder:windows-$RELEASE_ID
-    docker pull codefresh/cf-git-cloner:windows-$RELEASE_ID
-    docker pull codefresh/cf-compose:windows-$RELEASE_ID
-    docker pull codefresh/cf-deploy-kubernetes:windows-$RELEASE_ID
-    docker pull codefresh/fs-ops:windows-$RELEASE_ID
+    docker pull quay.io/codefresh/cf-container-logger:windows-$RELEASE_ID
+    docker pull quay.io/codefresh/cf-docker-pusher:windows-$RELEASE_ID
+    docker pull quay.io/codefresh/cf-docker-puller:windows-$RELEASE_ID
+    docker pull quay.io/codefresh/cf-docker-builder:windows-$RELEASE_ID
+    docker pull quay.io/codefresh/cf-git-cloner:windows-$RELEASE_ID
+    docker pull quay.io/codefresh/cf-compose:windows-$RELEASE_ID
+    docker pull quay.io/codefresh/cf-deploy-kubernetes:windows-$RELEASE_ID
+    docker pull quay.io/codefresh/fs-ops:windows-$RELEASE_ID
 
 
 echo -e "\n------------------\nRegistering Docker node ... "
