@@ -1,0 +1,10 @@
+collectors:
+  enabled: container,cpu,memory,cs,logical_disk,net,tcp,os,service,system
+log:
+  level: info
+scrape:
+  timeout-margin: 1
+telemetry:
+  addr: ":9182"
+  path: /metrics
+  max-requests: 5
