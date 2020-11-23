@@ -599,7 +599,42 @@ function createRebootNodeTask() {
   Get-Scheduledtask -Taskname "Reboot on exceeding*" | Start-ScheduledTask
 }
 
+function setUpMonitoring() {
+  $monitoring_dir="C:\codefresh\monitoring"
+  
+  function installNodeExporter() {
+    $version = "0.15.0"
+
+    Write-Host 'Installing Prometheus Windows node exporter...';
+    
+    Write-Host 'Opening a local firewall port for the Prometheus Windows node exporter...';
+    netsh advfirewall firewall add rule name="Windows Node Exporter" dir=in action=allow protocol=TCP localport=9182;
+
+    Write-Host 'Downloading the node exporter binary...';
+
+    (New-Object System.Net.WebClient).DownloadFile(`
+      "https://github.com/prometheus-community/windows_exporter/releases/download/v$version/windows_exporter-$version-amd64.exe", `
+      "$monitoring_dir\windows_exporter-$version-amd64.exe");
+
+    (New-Object System.Net.WebClient).DownloadString(`
+    'https://raw.githubusercontent.com/codefresh-io/docker-vm/master/node_exporter/node_exporter.yml') > $monitoring_dir/node_exporter.yml;
+
+    Write-Host 'Creating a service for the node exporter...';
+
+    sc.exe create windows_node_exporter `
+      binPath= "$monitoring_dir\windows_exporter-$version-amd64.exe --config.file $monitoring_dir\node_exporter.yml" `
+      start= "auto"
+      
+    sc.exe start windows_node_exporter
+  }
+
+  New-Item -ItemType Directory -Path $monitoring_dir -Force
+
+  installNodeExporter
+}
+
 createCacheCleanTask
 createCleanLoggersTask
 createCleanRAMTask
 createRebootNodeTask
+setUpMonitoring
