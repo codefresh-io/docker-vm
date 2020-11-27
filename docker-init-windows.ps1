@@ -617,7 +617,7 @@ function setUpMonitoring() {
       "$monitoring_dir\windows_exporter-$version-amd64.exe");
 
     (New-Object System.Net.WebClient).DownloadString(`
-    'https://raw.githubusercontent.com/codefresh-io/docker-vm/master/node_exporter/node_exporter.yml') > $monitoring_dir/node_exporter.yml;
+    'https://raw.githubusercontent.com/codefresh-io/docker-vm/master/monitoring/node_exporter/node_exporter.yml') > $monitoring_dir/node_exporter.yml;
 
     Write-Host 'Creating a service for the node exporter...';
 
@@ -628,9 +628,77 @@ function setUpMonitoring() {
     sc.exe start windows_node_exporter
   }
 
+  function installFluentd() {
+
+    $ruby_dir = "C:\ruby"
+    $fluentd_ver = "1.11.5"
+
+    # install ruby needed by fluentd
+    (New-Object System.Net.WebClient).DownloadFile("https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-2.7.2-1/rubyinstaller-devkit-2.7.2-1-x64.exe", "$env:TEMP\rubyinstaller-devkit-2.7.2-1-x64.exe")
+    Start-Process -Wait $env:TEMP/rubyinstaller-devkit-2.7.2-1-x64.exe -ArgumentList "/silent /dir=`"$ruby_dir`" /mergetasks=`"assocfiles,modpath`""
+
+    # install fluentd
+    cmd /c $ruby_dir\bin\gem install fluentd -v $fluentd_ver --no-doc
+
+    # install Fluentd plugins
+    cmd /c $ruby_dir\bin\fluent-gem.bat install fluent-plugin-windows-eventlog
+    cmd /c $ruby_dir\bin\fluent-gem.bat install fluent-plugin-grafana-loki
+
+    # make sure the monitoring directory exists
+    mkdir $monitoring_dir -Force
+
+    # create service for fluentd
+    sc.exe create fluentdwinsvc `
+        binPath= "$ruby_dir\bin\ruby.exe -C $ruby_dir\lib\ruby\gems\2.7.0\gems\fluentd-$fluentd_ver-x64-mingw32\lib\fluent\command\.. winsvc.rb --service-name fluentdwinsvc" `
+        displayname= "Fluentd Windows Service" `
+        start= "delayed-auto"
+        
+    New-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\fluentdwinsvc\ -Name fluentdopt -Value "-c $monitoring_dir\fluentd.conf -o $monitoring_dir\fluentd.log"
+
+    # set environment variables to be used in the fluentd config file
+    # get public IP of the instance to be set as a label for the logs 
+    $instance_public_ip=(New-Object System.Net.WebClient).DownloadString('http://checkip.amazonaws.com').replace("`n","")
+    [System.Environment]::SetEnvironmentVariable('INSTANCE_PUBLIC_IP', $instance_public_ip, [System.EnvironmentVariableTarget]::Machine)
+
+    # get the monitoring host DNS name provided by AWS, which resolves to a private IP
+    $mon_internal_host_name = "ec2-" + (Resolve-DnsName "windows-monitoring.cf-cd.com").IPAddress.Replace(".", "-") + ".compute-1.amazonaws.com"
+    [System.Environment]::SetEnvironmentVariable('MON_HOST_INTERNAL_NAME', $mon_internal_host_name, [System.EnvironmentVariableTarget]::Machine)
+
+    # get the fluentd configuration file
+    (New-Object System.Net.WebClient).DownloadString(`
+    'https://raw.githubusercontent.com/codefresh-io/docker-vm/master/monitoring/fluentd/fluentd.conf') | Out-file $monitoring_dir/fluentd.conf -Encoding ascii
+    
+    # configure docker daemon to work with fluentd and pass containers' labels
+
+    $container_labels = @(
+      "io.codefresh.accountId",
+      "io.codefresh.accountName",
+      "io.codefresh.operationName",
+      "io.codefresh.pipelineName",
+      "io.codefresh.processId",
+      "io.codefresh.owner"
+    )
+
+    $log_driver = 'fluentd'
+    $log_opts = "{
+      `"fluentd-address`": `"24224`",
+      `"labels`": `"$($container_labels -Join ',')`"
+    }"
+
+    $docker_cfg = (cat C:\ProgramData\docker\config\daemon.json | ConvertFrom-Json)
+
+    $docker_cfg | Add-Member -Force -Name "log-driver" -Value $log_driver -MemberType NoteProperty
+    $docker_cfg | Add-Member -Force -Name "log-opts" -Value $(echo $log_opts | ConvertFrom-Json) -MemberType NoteProperty
+    $docker_cfg | ConvertTo-JSON | Out-file C:\ProgramData\docker\config\daemon.json -Encoding ascii
+
+    Start-Service fluentdwinsvc
+    Restart-Service docker 
+  }
+
   New-Item -ItemType Directory -Path $monitoring_dir -Force
 
   installNodeExporter
+  installFluentd
 }
 
 createCacheCleanTask
