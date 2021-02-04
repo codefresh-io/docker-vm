@@ -1,7 +1,8 @@
 param (
     [string]$token = $(Read-Host "`nInput the node registration token, please"),
     [string]$api_host = $(Read-Host "`nInput the codefresh installation hostname, please. Default: g.codefresh.io"),
-    [string]$docker_root = $(Read-Host "`nInput the docker root path, please. It is recommended to have it on a separate disk. Default: C:/ProgramData/Docker")
+    [string]$docker_root = $(Read-Host "`nInput the docker root path, please. It is recommended to have it on a separate disk. Default: C:/ProgramData/Docker"),
+    [string]$ip = $(Read-Host "`nInput the IP of the node. It must be reachable by the CF application")
  )
 
 function installCygwin() {
@@ -438,7 +439,7 @@ function configureNode() {
         $docker_root = $docker_root.replace("\","/")
     }
 
-    [string[]]$supportedReleases=1809,1903,1909
+    [string[]]$supportedReleases=1809,1903,1909,2004
     $release_id = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').ReleaseId
     
     checkDockerInstalled
@@ -462,8 +463,8 @@ function configureNode() {
 
     C:\cygwin64\bin\bash -l -c "sed -i 's/\r$//' $script_path" # necessary for cygwin
 
-    Write-Host "Passing control to bash, command is C:\cygwin64\bin\bash -l -c '$script_path --token $token --api-host $api_host --docker-root $docker_root'";
-    C:\cygwin64\bin\bash -l -c "$script_path --token $token --api-host $api_host --docker-root $docker_root";
+    Write-Host "Passing control to bash, command is C:\cygwin64\bin\bash -l -c '$script_path --token $token --api-host $api_host --docker-root $docker_root --ip $ip'";
+    C:\cygwin64\bin\bash -l -c "$script_path --token $token --api-host $api_host --docker-root $docker_root --ip $ip";
 
     if (!$?) { 
         throw "`nError during the node configuration";
