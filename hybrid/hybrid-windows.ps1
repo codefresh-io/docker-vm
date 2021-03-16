@@ -145,7 +145,7 @@ mkdir -p $TMPDIR $CERTS_DIR
 
 echo -e "\n------------------\nValidate node ... "
 echo "{\"ip\": \"$IP\", \"dnsname\": \"${DNSNAME}\"}" > ${TMPDIR}/validate_req.json
-VALIDATE_STATUS=$(curl -sSL -d @${TMPDIR}/validate_req.json  -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" \
+VALIDATE_STATUS=$(curl -ksSL -d @${TMPDIR}/validate_req.json  -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" \
       -o ${TMP_VALIDATE_RESPONCE_FILE} -D ${TMP_VALIDATE_HEADERS_FILE} -w '%{http_code}' https://${API_HOST}/api/nodes/validate )
 echo "Validate Node request completed with HTTP_STATUS_CODE=$VALIDATE_STATUS"
 if [[ $VALIDATE_STATUS != 200 ]]; then
@@ -180,7 +180,7 @@ echo "{\"ip\": \"${IP}\", \"serverAuthIps\": \"${IP}\", \"dnsname\": \"${DNSNAME
 
 if [[ $GENERATE_CERTS == 'true' ]]; then
   rm -fv ${TMP_CERTS_HEADERS_FILE} ${TMP_CERTS_FILE_ZIP}
-  SIGN_STATUS=$(curl -sSL -d @${TMPDIR}/sign_req.json -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" -H "Expect: " \
+  SIGN_STATUS=$(curl -ksSL -d @${TMPDIR}/sign_req.json -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" -H "Expect: " \
         -o ${TMP_CERTS_FILE_ZIP} -D ${TMP_CERTS_HEADERS_FILE} -w '%{http_code}' https://${API_HOST}/api/nodes/sign )
         
   echo "Sign request completed with HTTP_STATUS_CODE=$SIGN_STATUS"
@@ -273,7 +273,7 @@ echo -e "\n------------------\nRegistering Docker node ... "
   echo "${REGISTER_DATA}" > ${TMPDIR}/register_data.json   
   
   rm -f ${TMPDIR}/register.out ${TMPDIR}/register_responce_headers.out
-  REGISTER_STATUS=$(curl -sSL -d @${TMPDIR}/register_data.json -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" \
+  REGISTER_STATUS=$(curl -ksSL -d @${TMPDIR}/register_data.json -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" \
         -o ${TMPDIR}/register.out -D ${TMPDIR}/register_responce_headers.out -w '%{http_code}' https://${API_HOST}/api/nodes/register ) 
 
 
