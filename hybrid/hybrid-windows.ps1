@@ -439,7 +439,14 @@ function configureNode() {
         $docker_root = $docker_root.replace("\","/")
     }
 
-    [string[]]$supportedReleases=1809,1903,1909,2004
+    [string[]]$supportedReleases = @(
+        1809
+        1903
+        1909
+        2004
+        2009
+    )
+    
     $release_id = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').ReleaseId
     
     checkDockerInstalled
