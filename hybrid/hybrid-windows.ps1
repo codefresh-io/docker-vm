@@ -311,7 +311,7 @@ function pullCFRuntimeImages() {
     docker pull quay.io/codefresh/cf-docker-puller:windows-$release_id
     docker pull quay.io/codefresh/cf-docker-builder:windows-$release_id
     docker pull quay.io/codefresh/cf-git-cloner:windows-$release_id
-    docker pull quay.io/codefresh/cf-compose:windows-$release_id
+    docker pull quay.io/codefresh/compose:windows-$release_id
     docker pull quay.io/codefresh/cf-deploy-kubernetes:windows-$release_id
     docker pull quay.io/codefresh/fs-ops:windows-$release_id
 }
