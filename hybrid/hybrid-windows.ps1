@@ -22,7 +22,7 @@ function installCygwin() {
 }
 
 function checkDockerInstalled() {
-    docker info 2>&1>$null
+    docker info | out-null
     if (!$?) {
         throw "No running docker daemon detected. Please make sure Docker EE is installed correctly...";
     }
@@ -445,9 +445,10 @@ function configureNode() {
         1909
         2004
         2009
+        21H2
     )
     
-    $release_id = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').ReleaseId
+    $release_id = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').DisplayVersion
     
     checkDockerInstalled
 
