@@ -440,12 +440,12 @@ function configureNode() {
     }
 
     [string[]]$supportedReleases = @(
-        1809
-        1903
-        1909
-        2004
-        2009
-        21H2
+        "1809"
+        "1903"
+        "1909"
+        "2004"
+        "2009"
+        "21H2"
     )
     
     $release_id = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').DisplayVersion
