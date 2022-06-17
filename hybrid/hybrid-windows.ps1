@@ -447,9 +447,13 @@ function configureNode() {
         "2009"
         "21H2"
     )
-    
-    $release_id = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').DisplayVersion
-    
+        
+    if ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").DisplayVersion) {
+        $release_id = ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").DisplayVersion)
+    } else { 
+        $release_id = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").ReleaseId 
+    }
+
     checkDockerInstalled
 
     if (!$supportedReleases.Contains($release_id)) {
