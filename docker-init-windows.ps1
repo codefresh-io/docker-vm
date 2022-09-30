@@ -24,7 +24,7 @@ ElseIf ($disksCount -eq 1) {
 }
 
 #$release_id = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').ReleaseId
-$release_id = ltsc2022
+$release_id = "ltsc2022-cr-14155"
 $script_path = ($pwd.Path + '\cloud-init.sh').Replace('\', '/');
 
 $script_contents = @'
