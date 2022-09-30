@@ -17,13 +17,14 @@ Elseif ($disksCount -gt 1) {
   $allowedDiskSize = (Get-StoragePool -isPrimordial $False).Size
   New-VirtualDisk -FriendlyName CodefreshVirtualDisk -Size $allowedDiskSize -StoragePoolFriendlyName CodefreshData -ProvisioningType Thin
   Initialize-Disk -VirtualDisk (Get-VirtualDisk -FriendlyName CodefreshVirtualDisk) -passthru | New-Partition -AssignDriveLetter -UseMaximumSize | Format-Volume
-} 
+}
 ElseIf ($disksCount -eq 1) {
   Initialize-Disk -Number 1 -PartitionStyle MBR
   New-Partition -DiskNumber 1 -UseMaximumSize -AssignDriveLetter | Format-Volume -NewFileSystemLabel "Drive" -FileSystem NTFS
 }
 
-$release_id = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').ReleaseId
+#$release_id = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').ReleaseId
+$release_id = ltsc2022
 $script_path = ($pwd.Path + '\cloud-init.sh').Replace('\', '/');
 
 $script_contents = @'
@@ -35,7 +36,7 @@ Please ensure:
   2. The script is running by admin user ( root or by sudo $(basename $0) )
   3. Port tcp:2376 should be open for codefresh whitelist addresses
 
-" 
+"
 
 API_HOST=${API_HOST:-https://g.codefresh.io/api/nodes}
 
@@ -180,11 +181,11 @@ source ${TMP_VALIDATE_RESPONCE_FILE}
 echo "CF_NODE_NAME - $CF_NODE_NAME"
 echo -e "\n------------------\nGenerating docker server tls certificates ... "
 if [[ "$GENERATE_CERTS" == 'true' || ! -f ${SRV_TLS_CERT} || ! -f ${SRV_TLS_KEY} || ! -f ${SRV_TLS_CA_CERT} ]]; then
-  openssl genrsa -out $SRV_TLS_KEY 4096 || fatal "Failed to generate openssl key " 
+  openssl genrsa -out $SRV_TLS_KEY 4096 || fatal "Failed to generate openssl key "
   openssl req -subj "/CN=${CF_NODE_NAME}.codefresh.io" -new -key $SRV_TLS_KEY -out $SRV_TLS_CSR  || fatal "Failed to generate openssl csr "
   GENERATE_CERTS=true
   CSR=$(sed ':a;N;$!ba;s/\n/\\n/g' ${SRV_TLS_CSR})
-else  
+else
   echo "Certificates already exist in $CERTS_DIR - Do not generate certificates"
 fi
 
@@ -196,7 +197,7 @@ if [[ $GENERATE_CERTS == 'true' ]]; then
   rm -fv ${TMP_CERTS_HEADERS_FILE} ${TMP_CERTS_FILE_ZIP}
   SIGN_STATUS=$(curl -sSL -d @${TMPDIR}/sign_req.json -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" -H "Expect: " \
         -o ${TMP_CERTS_FILE_ZIP} -D ${TMP_CERTS_HEADERS_FILE} -w '%{http_code}' $API_HOST/sign )
-        
+
   echo "Sign request completed with HTTP_STATUS_CODE=$SIGN_STATUS"
   if [[ $SIGN_STATUS != 200 ]]; then
      echo "ERROR: Cannot sign certificates"
@@ -251,7 +252,7 @@ if [[ $GENERATE_CERTS == 'true' ]]; then
 fi
 
     echo "--- Configuring the docker daemon..."
-    
+
     DOCKERD_CFG="{\"hosts\":[\"tcp://0.0.0.0:2376\",\"npipe:////./pipe/codefresh/docker_engine\",\"npipe://\"],\"tlsverify\":true,\"tlscacert\":\"C:/cygwin64/etc/ssl/codefresh/cf-ca.pem\",\"tlscert\":\"C:/cygwin64/etc/ssl/codefresh/cf-server-cert.pem\",\"tlskey\":\"C:/cygwin64/etc/ssl/codefresh/cf-server-key.pem\",\"graph\":\"$DOCKER_ROOT\",\"log-opts\":{\"max-size\":\"50m\"}}"
 
     mkdir C:/ProgramData/Docker/ 2>/dev/null
@@ -282,7 +283,7 @@ fi
 
 
 echo -e "\n------------------\nRegistering Docker node ... "
-   
+
    CPU_CORES=$(cat /proc/cpuinfo | grep "^processor" | wc -l)
    CPU_MODEL=$(cat /proc/cpuinfo | awk -F ': ' '/model name/{print $2}' | head -n1)
    RAM="$(free -m | awk '/Mem:/{print $2}')M"
@@ -301,19 +302,19 @@ echo -e "\n------------------\nRegistering Docker node ... "
 \"os_version\": \"$OS_VERSION\",
 \"os_name\": \"$OS_NAME\",
 \"hostname\": \"$HOSTNAME\",
-\"creation_date\": \"${CREATION_DATE}\"}"  
+\"creation_date\": \"${CREATION_DATE}\"}"
 
    REGISTER_DATA=\
 "{\"ip\": \"${IP}\",
   \"dnsname\": \"${DNSNAME}\",
   \"systemData\": "${SYSTEM_DATA}"
   }"
-   
-  echo "${REGISTER_DATA}" > ${TMPDIR}/register_data.json   
-  
+
+  echo "${REGISTER_DATA}" > ${TMPDIR}/register_data.json
+
   rm -f ${TMPDIR}/register.out ${TMPDIR}/register_responce_headers.out
   REGISTER_STATUS=$(curl -sSL -d @${TMPDIR}/register_data.json -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" \
-        -o ${TMPDIR}/register.out -D ${TMPDIR}/register_responce_headers.out -w '%{http_code}' $API_HOST/register ) 
+        -o ${TMPDIR}/register.out -D ${TMPDIR}/register_responce_headers.out -w '%{http_code}' $API_HOST/register )
 
 
     if grep cf-configurator ${TMPDIR}/register.out &>/dev/null; then
@@ -366,11 +367,11 @@ function createCacheCleanTask() {
       $leftImages = $(docker images).count
       $cleanedImages = $allImages.count - $leftImages
       echo "$(Get-Date) $cleanedImages images cleaned, $leftImages images left"
-    } 
+    }
   } else {
       echo "$(Get-Date) Nothing to clean, idling..."
   }'
-  
+
   Write-Host "`nAdding Docker image cleaner task...`n";
   [IO.File]::WriteAllLines($cacheCleanerScript_name, $cacheCleanerScript_contents);
   mkdir "$logsFolder/docker_cache_cleaner" 2> $null
@@ -394,7 +395,7 @@ function createCleanLoggersTask() {
   function findDanglingLoggers() {
       local logger_containers=$(docker ps | grep cf-container-logger | egrep -v '(second|minute)s* ago' | awk '{print $1}')
       local user_containers=$(docker ps | egrep -v cf-container-logger | tail -n +2 | awk '{print $1}')
-      
+
       for l in $logger_containers; do
           local l_pid=$(getPID $l)
           local dangling="true"
@@ -436,7 +437,7 @@ function createCleanLoggersTask() {
 
   cleanDanglingLoggers
 '@
-  
+
   Write-Host "`nAdding loggers cleaner task...`n";
   [IO.File]::WriteAllLines($loggerCleanerScript_name, $loggerCleanerScript_contents);
   mkdir "$loggerCleanerScript_logFolder" 2> $null
@@ -457,7 +458,7 @@ function createCleanRAMTask() {
   echo `"`$(Get-Date) Paged Pool memory has been dropped to the PageFile successfully`""
 
   function getCleanerBinary() {
-    
+
     $cleanRAMImage = "codefresh/win-maintainance:$release_id"
 
     docker pull $cleanRAMImage
@@ -504,7 +505,7 @@ function createRebootNodeTask() {
     }
 
     $nodeId = ($response.Content | ConvertFrom-Json) | Where-Object ip -eq $publicIp | Select-Object -ExpandProperty id
-    
+
     if (!$nodeId) {
       echo "$(Get-Date) Failed to get node id"
       exit 1
@@ -564,16 +565,16 @@ function createRebootNodeTask() {
       docker rm -f $(docker ps -aq)
       shutdown -r -f -t 0
   }
-  
+
   echo "`n------------------------------------------`n`n$(Get-Date) Starting the task loop..."
 
   $nodeId = getNodeId
-  
+
   $rebootOnce = $args[0]
   if ($rebootOnce -eq "once") {
     echo "$(Get-Date) Initiating scheduled reboot..."
     executeRebootProcedure
-  } 
+  }
 
   unPauseNode
 
@@ -601,12 +602,12 @@ function createRebootNodeTask() {
 
 function setUpMonitoring() {
   $monitoring_dir="C:\codefresh\monitoring"
-  
+
   function installNodeExporter() {
     $version = "0.15.0"
 
     Write-Host 'Installing Prometheus Windows node exporter...';
-    
+
     Write-Host 'Opening a local firewall port for the Prometheus Windows node exporter...';
     netsh advfirewall firewall add rule name="Windows Node Exporter" dir=in action=allow protocol=TCP localport=9182;
 
@@ -624,7 +625,7 @@ function setUpMonitoring() {
     sc.exe create windows_node_exporter `
       binPath= "$monitoring_dir\windows_exporter-$version-amd64.exe --config.file $monitoring_dir\node_exporter.yml" `
       start= "auto"
-      
+
     sc.exe start windows_node_exporter
   }
 
@@ -652,11 +653,11 @@ function setUpMonitoring() {
         binPath= "$ruby_dir\bin\ruby.exe -C $ruby_dir\lib\ruby\gems\2.7.0\gems\fluentd-$fluentd_ver-x64-mingw32\lib\fluent\command\.. winsvc.rb --service-name fluentdwinsvc" `
         displayname= "Fluentd Windows Service" `
         start= "delayed-auto"
-        
+
     New-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\fluentdwinsvc\ -Name fluentdopt -Value "-c $monitoring_dir\fluentd.conf -o $monitoring_dir\fluentd.log"
 
     # set environment variables to be used in the fluentd config file
-    # get public IP of the instance to be set as a label for the logs 
+    # get public IP of the instance to be set as a label for the logs
     $instance_public_ip=(New-Object System.Net.WebClient).DownloadString('http://checkip.amazonaws.com').replace("`n","")
     [System.Environment]::SetEnvironmentVariable('INSTANCE_PUBLIC_IP', $instance_public_ip, [System.EnvironmentVariableTarget]::Machine)
 
@@ -667,7 +668,7 @@ function setUpMonitoring() {
     # get the fluentd configuration file
     (New-Object System.Net.WebClient).DownloadString(`
     'https://raw.githubusercontent.com/codefresh-io/docker-vm/master/monitoring/fluentd/fluentd.conf') | Out-file $monitoring_dir/fluentd.conf -Encoding ascii
-    
+
     # configure docker daemon to work with fluentd and pass containers' labels
 
     $container_labels = @(
@@ -692,7 +693,7 @@ function setUpMonitoring() {
     $docker_cfg | ConvertTo-JSON | Out-file C:\ProgramData\docker\config\daemon.json -Encoding ascii
 
     Start-Service fluentdwinsvc
-    Restart-Service docker 
+    Restart-Service docker
   }
 
   New-Item -ItemType Directory -Path $monitoring_dir -Force
