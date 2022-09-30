@@ -5,6 +5,22 @@ param (
   [Parameter(Mandatory=$true)][string]$ip
 )
 
+function installCygwin() {
+  Write-Host "`nInstalling Cygwin...";
+
+  $url = 'https://cygwin.com/setup-x86_64.exe';
+
+  Invoke-WebRequest -Uri $url -OutFile 'C:/setup-x86_64.exe';
+  New-Item -ItemType directory -Path 'C:/tmp';
+
+  Start-Process "C:/setup-x86_64.exe" -NoNewWindow -Wait -PassThru -ArgumentList @('-q','-v','-n','-B','-R','C:/cygwin64','-l','C:/tmp','-s','http://ctm.crouchingtigerhiddenfruitbat.org/pub/cygwin/circa/64bit/2019/03/06/161558','-X','-P','default,curl,openssl,unzip,procps');
+
+  Remove-Item -Path 'C:/tmp' -Force -Recurse -ErrorAction Ignore;
+  Start-Process "C:/cygwin64/bin/cygcheck.exe" -NoNewWindow -Wait -PassThru -ArgumentList @('-c');
+
+  Write-Host "`nFinished installing Cygwin...";
+}
+
 Update-StorageProviderCache -DiscoveryLevel Full
 $offlineDisks =  Get-Disk | Where-Object PartitionStyle -Eq 'RAW'
 $disksCount = $offlineDisks.Number.Count
@@ -255,8 +271,8 @@ fi
 
     DOCKERD_CFG="{\"hosts\":[\"tcp://0.0.0.0:2376\",\"npipe:////./pipe/codefresh/docker_engine\",\"npipe://\"],\"tlsverify\":true,\"tlscacert\":\"C:/cygwin64/etc/ssl/codefresh/cf-ca.pem\",\"tlscert\":\"C:/cygwin64/etc/ssl/codefresh/cf-server-cert.pem\",\"tlskey\":\"C:/cygwin64/etc/ssl/codefresh/cf-server-key.pem\",\"graph\":\"$DOCKER_ROOT\",\"log-opts\":{\"max-size\":\"50m\"}}"
 
-    mkdir C:/ProgramData/Docker/ 2>/dev/null
-    mkdir C:/ProgramData/Docker/config 2>/dev/null
+    mkdir -p C:/ProgramData/docker/ 2>/dev/null
+    mkdir -p C:/ProgramData/docker/config 2>/dev/null
     echo $DOCKERD_CFG > C:/ProgramData/Docker/config/daemon.json
 
  if [[ ${RESTART_DOCKER} == 'true' ]]; then
@@ -333,6 +349,8 @@ echo -e "\n------------------\nRegistering Docker node ... "
 '@
 
 [IO.File]::WriteAllLines($script_path, $script_contents);
+
+installCygwin
 
 Write-Host 'Running the node installation shell script...';
 
