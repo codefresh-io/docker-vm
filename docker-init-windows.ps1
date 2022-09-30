@@ -39,8 +39,11 @@ ElseIf ($disksCount -eq 1) {
   New-Partition -DiskNumber 1 -UseMaximumSize -AssignDriveLetter | Format-Volume -NewFileSystemLabel "Drive" -FileSystem NTFS
 }
 
-#$release_id = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').ReleaseId
-$release_id = "ltsc2022-cr-14155"
+if ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").DisplayVersion) {
+  $release_id = ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").DisplayVersion)
+} else {
+  $release_id = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").ReleaseId
+}
 $script_path = ($pwd.Path + '\cloud-init.sh').Replace('\', '/');
 
 $script_contents = @'
@@ -351,6 +354,9 @@ echo -e "\n------------------\nRegistering Docker node ... "
 [IO.File]::WriteAllLines($script_path, $script_contents);
 
 installCygwin
+
+Write-Host 'Opening a local firewall port for the dockerd...';
+netsh advfirewall firewall add rule name="DockerD 2376" dir=in action=allow protocol=TCP localport=2376;
 
 Write-Host 'Running the node installation shell script...';
 
