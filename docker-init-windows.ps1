@@ -48,6 +48,9 @@ $script_path = ($pwd.Path + '\cloud-init.sh').Replace('\', '/');
 
 $script_contents = @'
 #!/bin/bash
+exec 3>&1 4>&2
+trap 'exec 2>&4 1>&3' 0 1 2 3
+exec 1>log.out 2>&1
 #
 echo -e "The script installs docker and registers node in codefresh.io \n\
 Please ensure:
