@@ -146,7 +146,7 @@ if [[ -z "$IP" ]]; then
         cnt=0
         while [[ $cnt -lt 20 ]]
         do
-           DEFAULT_IP=$(timeout 3 curl ident.me 2>/dev/null || timeout 3 curl ipecho.net/plain 2>/dev/null || timeout 3 curl whatismyip.akamai.com 2>/dev/null)
+           DEFAULT_IP=$(timeout 3 curl -k ident.me 2>/dev/null || timeout 3 curl ipecho.net/plain 2>/dev/null || timeout 3 curl -k whatismyip.akamai.com 2>/dev/null)
            [[ -n "${DEFAULT_IP}" ]] && break
            (( cnt ++ ))
            sleep 3
@@ -182,7 +182,7 @@ mkdir -p $TMPDIR $CERTS_DIR
 
 echo -e "\n------------------\nValidate node ... "
 echo "{\"ip\": \"$IP\", \"dnsname\": \"${DNSNAME}\"}" > ${TMPDIR}/validate_req.json
-VALIDATE_STATUS=$(curl -sSL -d @${TMPDIR}/validate_req.json  -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" \
+VALIDATE_STATUS=$(curl -k -sSL -d @${TMPDIR}/validate_req.json  -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" \
       -o ${TMP_VALIDATE_RESPONCE_FILE} -D ${TMP_VALIDATE_HEADERS_FILE} -w '%{http_code}' $API_HOST/validate )
 echo "Validate Node request completed with HTTP_STATUS_CODE=$VALIDATE_STATUS"
 if [[ $VALIDATE_STATUS != 200 ]]; then
@@ -217,7 +217,7 @@ echo "{\"ip\": \"${IP}\", \"serverAuthIps\": \"${IP}\", \"dnsname\": \"${DNSNAME
 
 if [[ $GENERATE_CERTS == 'true' ]]; then
   rm -fv ${TMP_CERTS_HEADERS_FILE} ${TMP_CERTS_FILE_ZIP}
-  SIGN_STATUS=$(curl -sSL -d @${TMPDIR}/sign_req.json -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" -H "Expect: " \
+  SIGN_STATUS=$(curl -k -sSL -d @${TMPDIR}/sign_req.json -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" -H "Expect: " \
         -o ${TMP_CERTS_FILE_ZIP} -D ${TMP_CERTS_HEADERS_FILE} -w '%{http_code}' $API_HOST/sign )
 
   echo "Sign request completed with HTTP_STATUS_CODE=$SIGN_STATUS"
@@ -335,7 +335,7 @@ echo -e "\n------------------\nRegistering Docker node ... "
   echo "${REGISTER_DATA}" > ${TMPDIR}/register_data.json
 
   rm -f ${TMPDIR}/register.out ${TMPDIR}/register_responce_headers.out
-  REGISTER_STATUS=$(curl -sSL -d @${TMPDIR}/register_data.json -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" \
+  REGISTER_STATUS=$(curl -k -sSL -d @${TMPDIR}/register_data.json -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" \
         -o ${TMPDIR}/register.out -D ${TMPDIR}/register_responce_headers.out -w '%{http_code}' $API_HOST/register )
 
 
