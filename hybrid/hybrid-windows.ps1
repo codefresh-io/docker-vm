@@ -13,7 +13,7 @@ function installCygwin() {
     Invoke-WebRequest -Uri $url -OutFile 'C:/setup-x86_64.exe';
     New-Item -ItemType directory -Path 'C:/tmp';
 
-    Start-Process "C:/setup-x86_64.exe" -NoNewWindow -Wait -PassThru -ArgumentList @('-q','-v','-n','-B','-R','C:/cygwin64','-l','C:/tmp','-s','http://ctm.crouchingtigerhiddenfruitbat.org/pub/cygwin/circa/64bit/2019/03/06/161558','-X','-P','default,curl,openssl,unzip,procps');
+    Start-Process "C:/setup-x86_64.exe" -NoNewWindow -Wait -PassThru -ArgumentList @('-q','-v','-n','-B','-R','C:/cygwin64','-l','C:/tmp','-s','http://ctm.crouchingtigerhiddenfruitbat.org/pub/cygwin/circa/64bit/2025/06/25/114649','-X','-P','default,curl,openssl,unzip,procps');
 
     Remove-Item -Path 'C:/tmp' -Force -Recurse -ErrorAction Ignore;
     Start-Process "C:/cygwin64/bin/cygcheck.exe" -NoNewWindow -Wait -PassThru -ArgumentList @('-c');
