@@ -40,7 +40,7 @@ Please ensure:
   2. The script is running by admin user ( root or by sudo $(basename $0) )
   3. Port tcp:2376 should be open for codefresh whitelist addresses
 
-" 
+"
 
 #---
 fatal() {
@@ -166,11 +166,11 @@ source ${TMP_VALIDATE_RESPONCE_FILE}
 echo "CF_NODE_NAME - $CF_NODE_NAME"
 echo -e "\n------------------\nGenerating docker server tls certificates ... "
 if [[ "$GENERATE_CERTS" == 'true' || ! -f ${SRV_TLS_CERT} || ! -f ${SRV_TLS_KEY} || ! -f ${SRV_TLS_CA_CERT} ]]; then
-  openssl genrsa -out $SRV_TLS_KEY 4096 || fatal "Failed to generate openssl key " 
+  openssl genrsa -out $SRV_TLS_KEY 4096 || fatal "Failed to generate openssl key "
   openssl req -subj "/CN=*.codefresh.io" -new -key $SRV_TLS_KEY -out $SRV_TLS_CSR  || fatal "Failed to generate openssl csr "
   GENERATE_CERTS=true
   CSR=$(sed ':a;N;$!ba;s/\n/\\n/g' ${SRV_TLS_CSR})
-else  
+else
   echo "Certificates already exist in $CERTS_DIR - Do not generate certificates"
 fi
 
@@ -182,7 +182,7 @@ if [[ $GENERATE_CERTS == 'true' ]]; then
   rm -fv ${TMP_CERTS_HEADERS_FILE} ${TMP_CERTS_FILE_ZIP}
   SIGN_STATUS=$(curl -ksSL -d @${TMPDIR}/sign_req.json -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" -H "Expect: " \
         -o ${TMP_CERTS_FILE_ZIP} -D ${TMP_CERTS_HEADERS_FILE} -w '%{http_code}' https://${API_HOST}/api/nodes/sign )
-        
+
   echo "Sign request completed with HTTP_STATUS_CODE=$SIGN_STATUS"
   if [[ $SIGN_STATUS != 200 ]]; then
      echo "ERROR: Cannot sign certificates"
@@ -235,7 +235,7 @@ if [[ $GENERATE_CERTS == 'true' ]]; then
 fi
 
     echo "--- Configuring the docker daemon..."
-    
+
     DOCKERD_CFG="{\"hosts\":[\"tcp://0.0.0.0:2376\",\"npipe:////./pipe/codefresh/docker_engine\",\"npipe://\"],\"tlsverify\":true,\"tlscacert\":\"C:/cygwin64/etc/ssl/codefresh/cf-ca.pem\",\"tlscert\":\"C:/cygwin64/etc/ssl/codefresh/cf-server-cert.pem\",\"tlskey\":\"C:/cygwin64/etc/ssl/codefresh/cf-server-key.pem\",\"data-root\":\"$DOCKER_ROOT\",\"log-opts\":{\"max-size\":\"50m\"}}"
 
     mkdir C:/ProgramData/Docker/ 2>/dev/null
@@ -243,7 +243,7 @@ fi
     echo $DOCKERD_CFG > C:/ProgramData/Docker/config/daemon.json
 
 echo -e "\n------------------\nRegistering Docker node ... "
-   
+
    CPU_CORES=$(cat /proc/cpuinfo | grep "^processor" | wc -l)
    CPU_MODEL=$(cat /proc/cpuinfo | awk -F ': ' '/model name/{print $2}' | head -n1)
    RAM="$(free -m | awk '/Mem:/{print $2}')M"
@@ -262,19 +262,19 @@ echo -e "\n------------------\nRegistering Docker node ... "
 \"os_version\": \"$OS_VERSION\",
 \"os_name\": \"$OS_NAME\",
 \"hostname\": \"$HOSTNAME\",
-\"creation_date\": \"${CREATION_DATE}\"}"  
+\"creation_date\": \"${CREATION_DATE}\"}"
 
    REGISTER_DATA=\
 "{\"ip\": \"${IP}\",
   \"dnsname\": \"${DNSNAME}\",
   \"systemData\": "${SYSTEM_DATA}"
   }"
-   
-  echo "${REGISTER_DATA}" > ${TMPDIR}/register_data.json   
-  
+
+  echo "${REGISTER_DATA}" > ${TMPDIR}/register_data.json
+
   rm -f ${TMPDIR}/register.out ${TMPDIR}/register_responce_headers.out
   REGISTER_STATUS=$(curl -ksSL -d @${TMPDIR}/register_data.json -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" \
-        -o ${TMPDIR}/register.out -D ${TMPDIR}/register_responce_headers.out -w '%{http_code}' https://${API_HOST}/api/nodes/register ) 
+        -o ${TMPDIR}/register.out -D ${TMPDIR}/register_responce_headers.out -w '%{http_code}' https://${API_HOST}/api/nodes/register )
 
 
     if grep cf-configurator ${TMPDIR}/register.out &>/dev/null; then
@@ -342,11 +342,11 @@ function createMaintenanceTasks() {
             $leftImages = $(docker images).count
             $cleanedImages = $allImages.count - $leftImages
             echo "$(Get-Date) $cleanedImages images cleaned, $leftImages images left"
-            } 
+            }
         } else {
             echo "$(Get-Date) Nothing to clean, idling..."
         }'
-        
+
         Write-Host "`nAdding Docker cache cleaner task...`n";
         [IO.File]::WriteAllLines($cacheCleanerScript_name, $cacheCleanerScript_contents);
         mkdir "$logsFolder/docker_cache_cleaner" 2> $null
@@ -370,7 +370,7 @@ function createMaintenanceTasks() {
         function findDanglingLoggers() {
             local logger_containers=$(docker ps | grep cf-container-logger | egrep -v '(second|minute)s* ago' | awk '{print $1}')
             local user_containers=$(docker ps | egrep -v cf-container-logger | tail -n +2 | awk '{print $1}')
-            
+
             for l in $logger_containers; do
                 local l_pid=$(getPID $l)
                 local dangling="true"
@@ -412,7 +412,7 @@ function createMaintenanceTasks() {
 
         cleanDanglingLoggers
 '@
-      
+
         Write-Host "`nAdding loggers cleaner task...`n";
         [IO.File]::WriteAllLines($loggerCleanerScript_name, $loggerCleanerScript_contents);
         mkdir "$loggerCleanerScript_logFolder" 2> $null
@@ -446,24 +446,25 @@ function configureNode() {
         "2004"
         "2009"
         "21H2"
+        "24H2"
     )
-        
+
     if ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").DisplayVersion) {
         $release_id = ((Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").DisplayVersion)
-    } else { 
-        $release_id = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").ReleaseId 
+    } else {
+        $release_id = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").ReleaseId
     }
 
     checkDockerInstalled
 
     if (!$supportedReleases.Contains($release_id)) {
-        throw "Your Windows Server release is not supported"        
+        throw "Your Windows Server release is not supported"
     }
 
     Write-Host "`nStarting Codefresh node installation...`n";
 
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    
+
     installCygwin
 
     Write-Host 'Opening a local firewall port for the dockerd...';
@@ -478,7 +479,7 @@ function configureNode() {
     Write-Host "Passing control to bash, command is C:\cygwin64\bin\bash -l -c '$script_path --token $token --api-host $api_host --docker-root $docker_root --ip $ip'";
     C:\cygwin64\bin\bash -l -c "$script_path --token $token --api-host $api_host --docker-root $docker_root --ip $ip";
 
-    if (!$?) { 
+    if (!$?) {
         throw "`nError during the node configuration";
     }
 
@@ -487,7 +488,7 @@ function configureNode() {
     Write-Host "Restarting docker daemon to apply the new configuration" -ForegroundColor Yellow
     net stop docker
     net start docker
-  
+
     pullCFRuntimeImages
 
     rm -Force $script_path
