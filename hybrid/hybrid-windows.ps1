@@ -236,7 +236,7 @@ fi
 
     echo "--- Configuring the docker daemon..."
 
-    DOCKERD_CFG="{\"hosts\":[\"tcp://0.0.0.0:2376\",\"npipe:////./pipe/codefresh/docker_engine\",\"npipe://\"],\"tlsverify\":true,\"tlscacert\":\"C:/cygwin64/etc/ssl/codefresh/cf-ca.pem\",\"tlscert\":\"C:/cygwin64/etc/ssl/codefresh/cf-server-cert.pem\",\"tlskey\":\"C:/cygwin64/etc/ssl/codefresh/cf-server-key.pem\",\"data-root\":\"$DOCKER_ROOT\",\"log-opts\":{\"max-size\":\"50m\"}}"
+    DOCKERD_CFG="{\"hosts\":[\"tcp://0.0.0.0:2376\",\"npipe://\"],\"tlsverify\":true,\"tlscacert\":\"C:/cygwin64/etc/ssl/codefresh/cf-ca.pem\",\"tlscert\":\"C:/cygwin64/etc/ssl/codefresh/cf-server-cert.pem\",\"tlskey\":\"C:/cygwin64/etc/ssl/codefresh/cf-server-key.pem\",\"data-root\":\"$DOCKER_ROOT\",\"log-opts\":{\"max-size\":\"50m\"}}"
 
     mkdir C:/ProgramData/Docker/ 2>/dev/null
     mkdir C:/ProgramData/Docker/config 2>/dev/null
