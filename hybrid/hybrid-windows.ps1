@@ -6,9 +6,6 @@ param (
     [switch]$use_tempdir_symlink 
  )
 
-$sourceTmp = if (-not [string]::IsNullOrWhiteSpace($env:SYSTEMTEMP)) { $env:SYSTEMTEMP } else { 'C:\Windows\SystemTemp' }
-$targetTmp = if (-not [string]::IsNullOrWhiteSpace($env:DOCKER_TMPDIR)) { $env:DOCKER_TMPDIR } else { 'D:\SystemTemp' }
-
 function installCygwin() {
     Write-Host "`nInstalling Cygwin...";
 
@@ -33,6 +30,9 @@ function checkDockerInstalled() {
 }
 
 function createSymlink(){
+
+  $sourceTmp = if (-not [string]::IsNullOrWhiteSpace($env:SystemTemp)) { $env:SystemTemp } else { 'C:\Windows\SystemTemp' }
+  $targetTmp = if (-not [string]::IsNullOrWhiteSpace($env:DOCKER_TMPDIR)) { $env:DOCKER_TMPDIR } else { 'C:\SystemTemp' }
   
   if ($sourceTmp -eq $targetTmp) {
     return
