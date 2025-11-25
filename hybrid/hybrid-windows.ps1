@@ -52,7 +52,7 @@ function createSymlink(){
     if ($isReparse) {
       $curTargetTmp = $srcItem.Target
       if ($curTargetTmp -is [array]) { $curTargetTmp = $curTargetTmp[0] }
-      if ($curTargetTmp -and & $normalize $curTargetTmp -ieq (& $normalize $targetTmp)) {
+      if ($curTargetTmp -and ((& $normalize $curTargetTmp) -ieq (& $normalize $targetTmp))) {
         Write-Host "Link exists yet: $sourceTmp → $curTargetTmp."
       } else {
         Write-Host "Link exists yet but points to wrong target: $sourceTmp → $curTargetTmp."
