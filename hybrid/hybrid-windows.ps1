@@ -2,8 +2,13 @@ param (
     [string]$token = $(Read-Host "`nInput the node registration token, please"),
     [string]$api_host = $(Read-Host "`nInput the codefresh installation hostname, please. Default: g.codefresh.io"),
     [string]$docker_root = $(Read-Host "`nInput the docker root path, please. It is recommended to have it on a separate disk. Default: C:/ProgramData/Docker"),
-    [string]$ip = $(Read-Host "`nInput the IP of the node. It must be reachable by the CF application")
+    [string]$ip = $(Read-Host "`nInput the IP of the node. It must be reachable by the CF application"),
+    [switch]$use_tempdir_symlink 
  )
+
+
+$sourceTmp = if (-not [string]::IsNullOrWhiteSpace($env:SystemTemp)) { $env:SystemTemp } else { 'C:\Windows\SystemTemp' }
+$targetTmp = if (-not [string]::IsNullOrWhiteSpace($env:DOCKER_TMPDIR)) { $env:DOCKER_TMPDIR } else { 'C:\SystemTemp' }
 
 function installCygwin() {
     Write-Host "`nInstalling Cygwin...";
@@ -26,6 +31,50 @@ function checkDockerInstalled() {
     if (!$?) {
         throw "No running docker daemon detected. Please make sure Docker EE is installed correctly...";
     }
+}
+
+function createSymlink(){
+
+  
+  if ($sourceTmp -eq $targetTmp) {
+    return
+  }
+
+  Stop-Service docker -ErrorAction SilentlyContinue
+
+  if (-not (Test-Path -LiteralPath $targetTmp)) {
+    New-Item -ItemType Directory -Path $targetTmp | Out-Null
+  }
+
+  $srcItem = Get-Item -LiteralPath $sourceTmp -ErrorAction SilentlyContinue
+  $normalize = { param($p) ([IO.Path]::GetFullPath($p)).TrimEnd('\') }
+
+  if ($srcItem) {
+    $isReparse = ($srcItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
+    if ($isReparse) {
+      $curTargetTmp = $srcItem.Target
+      if ($curTargetTmp -is [array]) { $curTargetTmp = $curTargetTmp[0] }
+      if ($curTargetTmp -and ((& $normalize $curTargetTmp) -ieq (& $normalize $targetTmp))) {
+        Write-Host "Link exists yet: $sourceTmp → $curTargetTmp."
+      } else {
+        Write-Host "Link exists yet but points to wrong target: $sourceTmp → $curTargetTmp."
+      }
+    } else {
+      $oldSourceTmp = "$sourceTmp.old"
+      if (Test-Path -LiteralPath $oldSourceTmp) {
+        $oldSourceTmp = "$sourceTmp.old_{0:yyyyMMdd_HHmmss}" -f (Get-Date)
+      }
+      Write-Host "Renaming '$sourceTmp' -> '$(Split-Path -Leaf $oldSourceTmp)'..."
+      Rename-Item -LiteralPath $sourceTmp -NewName (Split-Path -Leaf $oldSourceTmp) -Force
+
+      Write-Host "Creating junction $sourceTmp → $targetTmp ..."
+      cmd /c "mklink /J `"$sourceTmp`" `"$targetTmp`"" | Out-Null
+    }
+  } else {
+    Write-Host "Creating junction $sourceTmp → $targetTmp ..."
+    cmd /c "mklink /J `"$sourceTmp`" `"$targetTmp`"" | Out-Null
+  }
+  Start-Service docker -ErrorAction SilentlyContinue
 }
 
 function writeEmbeddedRegScript() {
@@ -459,6 +508,11 @@ function configureNode() {
 
     if (!$supportedReleases.Contains($release_id)) {
         throw "Your Windows Server release is not supported"
+    }
+
+    if ($use_tempdir_symlink) {
+        Write-Host "Creating symlink for $sourceTmp folder..."
+        createSymlink
     }
 
     Write-Host "`nStarting Codefresh node installation...`n";

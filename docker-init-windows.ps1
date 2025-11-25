@@ -2,15 +2,22 @@ param (
   [Parameter(Mandatory=$true)][string]$api_host,
   [Parameter(Mandatory=$true)][string]$token,
   [Parameter(Mandatory=$true)][string]$dns_name,
-  [Parameter(Mandatory=$true)][string]$ip
+  [Parameter(Mandatory=$true)][string]$ip,
+  [switch]$use_tempdir_symlink
 )
 
 Update-StorageProviderCache -DiscoveryLevel Full
 $offlineDisks =  Get-Disk | Where-Object PartitionStyle -Eq 'RAW'
 $disksCount = $offlineDisks.Number.Count
 $docker_root = "D:/docker"
+$sourceTmp = if (-not [string]::IsNullOrWhiteSpace($env:SYSTEMTEMP)) { $env:SYSTEMTEMP } else { 'C:\Windows\SystemTemp' }
+$targetTmp = if (-not [string]::IsNullOrWhiteSpace($env:DOCKER_TMPDIR)) { $env:DOCKER_TMPDIR } else { 'D:\SystemTemp' }
 
-if (($disksCount -eq 0) -and (!(Test-Path D:))) {$dockerRoot = "C:/ProgramData/docker"}
+
+if (($disksCount -eq 0) -and (!(Test-Path D:))) {
+    $docker_root = "C:/ProgramData/docker"
+    $targetTmp = $sourceTmp
+}
 Elseif ($disksCount -gt 1) {
   $PhysicalDisks = Get-StorageSubSystem -FriendlyName "Windows Storage*" | Get-PhysicalDisk -CanPool $True
   New-StoragePool -FriendlyName CodefreshData -StorageSubsystemFriendlyName "Windows Storage*" -PhysicalDisks $PhysicalDisks
@@ -21,6 +28,54 @@ Elseif ($disksCount -gt 1) {
 ElseIf ($disksCount -eq 1) {
   Initialize-Disk -Number 1 -PartitionStyle MBR
   New-Partition -DiskNumber 1 -UseMaximumSize -AssignDriveLetter | Format-Volume -NewFileSystemLabel "Drive" -FileSystem NTFS
+}
+
+function createSymlink(){
+  
+  if ($sourceTmp -eq $targetTmp) {
+    return
+  }
+
+  Stop-Service docker -ErrorAction SilentlyContinue
+
+  if (-not (Test-Path -LiteralPath $targetTmp)) {
+    New-Item -ItemType Directory -Path $targetTmp | Out-Null
+  }
+
+  $srcItem = Get-Item -LiteralPath $sourceTmp -ErrorAction SilentlyContinue
+  $normalize = { param($p) ([IO.Path]::GetFullPath($p)).TrimEnd('\') }
+
+  if ($srcItem) {
+    $isReparse = ($srcItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
+    if ($isReparse) {
+      $curTargetTmp = $srcItem.Target
+      if ($curTargetTmp -is [array]) { $curTargetTmp = $curTargetTmp[0] }
+      if ($curTargetTmp -and & $normalize $curTargetTmp -ieq (& $normalize $targetTmp)) {
+        Write-Host "Link exists yet: $sourceTmp → $curTargetTmp."
+      } else {
+        Write-Host "Link exists yet but points to wrong target: $sourceTmp → $curTargetTmp."
+      }
+    } else {
+      $oldSourceTmp = "$sourceTmp.old"
+      if (Test-Path -LiteralPath $oldSourceTmp) {
+        $oldSourceTmp = "$sourceTmp.old_{0:yyyyMMdd_HHmmss}" -f (Get-Date)
+      }
+      Write-Host "Renaming '$sourceTmp' -> '$(Split-Path -Leaf $oldSourceTmp)'..."
+      Rename-Item -LiteralPath $sourceTmp -NewName (Split-Path -Leaf $oldSourceTmp) -Force
+
+      Write-Host "Creating junction $sourceTmp → $targetTmp ..."
+      cmd /c "mklink /J `"$sourceTmp`" `"$targetTmp`"" | Out-Null
+    }
+  } else {
+    Write-Host "Creating junction $sourceTmp → $targetTmp ..."
+    cmd /c "mklink /J `"$sourceTmp`" `"$targetTmp`"" | Out-Null
+  }
+  Start-Service docker -ErrorAction SilentlyContinue
+}
+
+if ($use_tempdir_symlink) {
+  Write-Host "Creating symlink for $sourceTmp folder..."
+  createSymlink
 }
 
 $release_id = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').ReleaseId
