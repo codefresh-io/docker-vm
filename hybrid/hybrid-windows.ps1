@@ -3,7 +3,7 @@ param (
     [string]$api_host = $(Read-Host "`nInput the codefresh installation hostname, please. Default: g.codefresh.io"),
     [string]$docker_root = $(Read-Host "`nInput the docker root path, please. It is recommended to have it on a separate disk. Default: C:/ProgramData/Docker"),
     [string]$ip = $(Read-Host "`nInput the IP of the node. It must be reachable by the CF application"),
-    [bool]$use_tempdir_symlink = $true
+    [switch]$use_tempdir_symlink 
  )
 
 $sourceTmp = if (-not [string]::IsNullOrWhiteSpace($env:SYSTEMTEMP)) { $env:SYSTEMTEMP } else { 'C:\Windows\SystemTemp' }
@@ -509,6 +509,7 @@ function configureNode() {
     }
 
     if ($use_tempdir_symlink) {
+        Write-Host "Creating symlink for docker_root folder..."
         createSymlink
     }
 
