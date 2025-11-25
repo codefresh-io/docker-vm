@@ -3,7 +3,7 @@ param (
   [Parameter(Mandatory=$true)][string]$token,
   [Parameter(Mandatory=$true)][string]$dns_name,
   [Parameter(Mandatory=$true)][string]$ip,
-  [bool]$use_tempdir_symlink = $true
+  [switch]$use_tempdir_symlink
 )
 
 Update-StorageProviderCache -DiscoveryLevel Full
@@ -74,6 +74,7 @@ function createSymlink(){
 }
 
 if ($use_tempdir_symlink) {
+  Write-Host "Creating symlink for $sourceTmp folder..."
   createSymlink
 }
 
