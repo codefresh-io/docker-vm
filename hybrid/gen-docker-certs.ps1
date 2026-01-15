@@ -180,55 +180,6 @@ fi
     mkdir C:/ProgramData/Docker/ 2>/dev/null
     mkdir C:/ProgramData/Docker/config 2>/dev/null
     echo $DOCKERD_CFG > C:/ProgramData/Docker/config/daemon.json
-
-echo -e "\n------------------\nRegistering Docker node ... "
-
-   CPU_CORES=$(cat /proc/cpuinfo | grep "^processor" | wc -l)
-   CPU_MODEL=$(cat /proc/cpuinfo | awk -F ': ' '/model name/{print $2}' | head -n1)
-   RAM="$(free -m | awk '/Mem:/{print $2}')M"
-   SYSTEM_DISK=$(/bin/df -h / | awk 'NR==2{print $2}')
-   CREATION_DATE=$(date +"%Y-%m-%d %H:%M")
-   OS_ID=$(. /etc/os-release 2>/dev/null && echo ${ID} || echo linux)
-   OS_VERSION=$(. /etc/os-release 2>/dev/null && echo ${VERSION_ID} || echo "")
-   OS_NAME=$(. /etc/os-release 2>/dev/null && echo ${PRETTY_NAME:-$ID} || echo linux)
-   HOSTNAME=$(hostname)
-
-   SYSTEM_DATA="{\"cpu_cores\": \"${CPU_CORES}\",
-\"cpu_model\": \"${CPU_MODEL}\",
-\"ram\": \"${RAM}\",
-\"system_disk\": \"${SYSTEM_DISK}\",
-\"os_id\": \"$OS_ID\",
-\"os_version\": \"$OS_VERSION\",
-\"os_name\": \"$OS_NAME\",
-\"hostname\": \"$HOSTNAME\",
-\"creation_date\": \"${CREATION_DATE}\"}"
-
-   REGISTER_DATA=\
-"{\"ip\": \"${IP}\",
-  \"dnsname\": \"${DNSNAME}\",
-  \"systemData\": "${SYSTEM_DATA}"
-  }"
-
-  echo "${REGISTER_DATA}" > ${TMPDIR}/register_data.json
-
-  rm -f ${TMPDIR}/register.out ${TMPDIR}/register_responce_headers.out
-  REGISTER_STATUS=$(curl -ksSL -d @${TMPDIR}/register_data.json -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" \
-        -o ${TMPDIR}/register.out -D ${TMPDIR}/register_responce_headers.out -w '%{http_code}' https://${API_HOST}/api/nodes/register )
-
-
-    if grep cf-configurator ${TMPDIR}/register.out &>/dev/null; then
-        echo -e "Node has been successfully registered with Codefresh\n------"
-        exit 0
-    fi
-    echo "Registration request completed with HTTP_STATUS_CODE=$REGISTER_STATUS"
-    if [[ $REGISTER_STATUS == 200 ]]; then
-    echo -e "Node has been successfully registered with Codefresh\n------"
-    else
-    echo "ERROR: Failed to register docker node with Codefresh"
-    [[ -f ${TMPDIR}/register.out ]] && cat ${TMPDIR}/register.out
-    echo -e "\n----\n"
-    exit 1
-    fi
 '@
 
     [IO.File]::WriteAllLines($script_path, $script_contents);
