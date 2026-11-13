@@ -1,0 +1,45 @@
+hybrid/hybrid-windows.ps1
+  s_62b623fbcbc870::t_4b32050b169b44 6-7
+  s_62b623fbcbc870::t_bd95e8de5fa95c 17-18,21-24
+  s_62b623fbcbc870::t_b4e58d5af04891 106,144-146,157,260,295,388,596-599
+  s_62b623fbcbc870::t_e5bb01ee89b727 205-257
+README.md
+  s_62b623fbcbc870::t_f4e15a79824d8b 12-15
+docker-init-windows.ps1
+  s_62b623fbcbc870::t_e5bb01ee89b727 215-267
+  s_62b623fbcbc870::t_b2104bb1187cec 712-719
+  s_62b623fbcbc870::t_6ee8e10d92b9a7 733
+  s_62b623fbcbc870::t_e31313c3748829 754
+docker-init-linux.sh
+  s_62b623fbcbc870::t_d8cd8416c09c32 128,134,138,161-164
+  s_62b623fbcbc870::t_4385631717e384 176,261-277,280-298,300-301
+  s_62b623fbcbc870::t_dde7563fb1a3df 165-167,173-175
+  s_62b623fbcbc870::t_3ef1f5ae82b8a6 177-179
+  s_62b623fbcbc870::t_d7f436f4829809 168-172,180-185
+hybrid/gen-docker-certs.ps1
+  s_62b623fbcbc870::t_e5bb01ee89b727 128-180
+  h_48b74706cf95a4 276-279
+  s_62b623fbcbc870::t_20009e3d3e8213 5-6
+  s_62b623fbcbc870::t_b4e58d5af04891 29,67-69,80,183,218
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d30f25b2bfd015239602779fa4d302e325b39865",
+  "prompts": {},
+  "humans": {
+    "h_48b74706cf95a4": {
+      "author": "Bohdan Pysarenko <bohdan.pisarenko@octopus.com>"
+    }
+  },
+  "sessions": {
+    "s_62b623fbcbc870": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ec77ce76-fad0-4715-9ae5-c907e0a3e81a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bohdan Pysarenko <bohdan.pisarenko@octopus.com>"
+    }
+  }
+}
