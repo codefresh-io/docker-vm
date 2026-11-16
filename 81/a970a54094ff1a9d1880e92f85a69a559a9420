@@ -1,0 +1,23 @@
+docker-init-linux.sh
+  s_62b623fbcbc870::t_ec00d8c55260cb 267-268,272,274-277
+hybrid/gen-docker-certs.ps1
+  s_62b623fbcbc870::t_ed6612eccfa5b7 276,278-279
+hybrid/hybrid-windows.ps1
+  s_62b623fbcbc870::t_ed6612eccfa5b7 598-599
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "81a970a54094ff1a9d1880e92f85a69a559a9420",
+  "prompts": {},
+  "sessions": {
+    "s_62b623fbcbc870": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ec77ce76-fad0-4715-9ae5-c907e0a3e81a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Bohdan Pysarenko <bohdan.pisarenko@octopus.com>"
+    }
+  }
+}
