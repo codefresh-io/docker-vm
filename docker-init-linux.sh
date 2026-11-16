@@ -264,15 +264,17 @@ DOCKER_DEB_KEY_FINGERPRINT=9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 DOCKER_RPM_KEY_FINGERPRINT=060A61C51B558A7F742B77AAC52FEB6B621E9F35
 DOCKER_PKGS="docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin"
 
-# Downloads a repo signing key and fails unless its primary key fingerprint matches
+# Downloads a repo signing key and installs only the key with the pinned fingerprint,
+# so any extra keys in the download are never trusted
 fetch_docker_key() {
    local url=$1 fingerprint=$2 dest=$3
    local gpg_home=${TMPDIR}/gnupg
-   mkdir -p -m 700 $gpg_home
+   rm -rf $gpg_home && mkdir -p -m 700 $gpg_home
    curl -fsSL "$url" -o ${TMPDIR}/docker.gpg || fatal "Failed to download $url"
-   gpg --batch --homedir $gpg_home --with-colons --import-options show-only --import ${TMPDIR}/docker.gpg 2>/dev/null \
-      | awk -F: '$1=="fpr" { print $10; exit }' | grep -qx "$fingerprint" || fatal "Fingerprint of $url does not match $fingerprint"
-   install -m 0644 ${TMPDIR}/docker.gpg "$dest"
+   gpg --batch --quiet --homedir $gpg_home --import ${TMPDIR}/docker.gpg 2>/dev/null
+   gpg --batch --homedir $gpg_home --armor --export "$fingerprint" > ${TMPDIR}/docker-pinned.gpg
+   [[ -s ${TMPDIR}/docker-pinned.gpg ]] || fatal "Key $fingerprint not found in $url"
+   install -m 0644 ${TMPDIR}/docker-pinned.gpg "$dest"
 }
 
 if [[ $INSTALL_DOCKER == 'true' ]]; then

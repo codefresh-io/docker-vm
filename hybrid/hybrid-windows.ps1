@@ -595,8 +595,8 @@ function configureNode() {
 
     $insecure_arg = if ($insecure) { " --insecure" } else { "" }
 
-    Write-Host "Passing control to bash, command is C:\cygwin64\bin\bash -l -c '$script_path --token $token --api-host $api_host --docker-root $docker_root --ip $ip$insecure_arg'";
-    C:\cygwin64\bin\bash -l -c "$script_path --token $token --api-host $api_host --docker-root $docker_root --ip $ip$insecure_arg";
+    Write-Host "Passing control to bash, command is C:\cygwin64\bin\bash -l -c '$script_path$insecure_arg --token $token --api-host $api_host --docker-root $docker_root --ip $ip'";
+    C:\cygwin64\bin\bash -l -c "$script_path$insecure_arg --token $token --api-host $api_host --docker-root $docker_root --ip $ip";
 
     if (!$?) {
         throw "`nError during the node configuration";
