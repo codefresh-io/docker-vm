@@ -212,6 +212,59 @@ SRV_TLS_CA_CERT=${CERTS_DIR}/cf-ca.pem
 
 mkdir -p $TMPDIR $CERTS_DIR
 
+# Cygwin's ca-certificates still trusts the compromised eMudhra intermediates (CF-2542).
+# Distrust their roots, as the Mozilla CA bundle did on 2026-10-20, before the first HTTPS request.
+cat > /etc/pki/ca-trust/source/emudhra-distrust.p11-kit <<'EOF_CERTS'
+[p11-kit-object-v1]
+label: "Distrust emSign ECC Root CA - G3"
+x-distrusted: true
+-----BEGIN CERTIFICATE-----
+MIICTjCCAdOgAwIBAgIKPPYHqWhwDtqLhDAKBggqhkjOPQQDAzBrMQswCQYDVQQG
+EwJJTjETMBEGA1UECxMKZW1TaWduIFBLSTElMCMGA1UEChMcZU11ZGhyYSBUZWNo
+bm9sb2dpZXMgTGltaXRlZDEgMB4GA1UEAxMXZW1TaWduIEVDQyBSb290IENBIC0g
+RzMwHhcNMTgwMjE4MTgzMDAwWhcNNDMwMjE4MTgzMDAwWjBrMQswCQYDVQQGEwJJ
+TjETMBEGA1UECxMKZW1TaWduIFBLSTElMCMGA1UEChMcZU11ZGhyYSBUZWNobm9s
+b2dpZXMgTGltaXRlZDEgMB4GA1UEAxMXZW1TaWduIEVDQyBSb290IENBIC0gRzMw
+djAQBgcqhkjOPQIBBgUrgQQAIgNiAAQjpQy4LRL1KPOxst3iAhKAnjlfSU2fySU0
+WXTsuwYc58Byr+iuL+FBVIcUqEqy6HyC5ltqtdyzdc6LBtCGI79G1Y4PPwT01xyS
+fvalY8L1X44uT6EYGQIrMgqCZH0Wk9GjQjBAMB0GA1UdDgQWBBR8XQKEE9TMipuB
+zhccLikenEhjQjAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0TAQH/BAUwAwEB/zAKBggq
+hkjOPQQDAwNpADBmAjEAvvNhzwIQHWSVB7gYboiFBS+DCBeQyh+KTOgNG3qxrdWB
+CUfvO6wIBHxcmbHtRwfSAjEAnbpV/KlK6O3t5nYBQnvI+GDZjVGLVTv7jHvrZQnD
++JbNR6iC8hZVdyR+EhCVBCyj
+-----END CERTIFICATE-----
+
+[p11-kit-object-v1]
+label: "Distrust Comodo AAA Services root"
+x-distrusted: true
+-----BEGIN CERTIFICATE-----
+MIIEMjCCAxqgAwIBAgIBATANBgkqhkiG9w0BAQUFADB7MQswCQYDVQQGEwJHQjEb
+MBkGA1UECAwSR3JlYXRlciBNYW5jaGVzdGVyMRAwDgYDVQQHDAdTYWxmb3JkMRow
+GAYDVQQKDBFDb21vZG8gQ0EgTGltaXRlZDEhMB8GA1UEAwwYQUFBIENlcnRpZmlj
+YXRlIFNlcnZpY2VzMB4XDTA0MDEwMTAwMDAwMFoXDTI4MTIzMTIzNTk1OVowezEL
+MAkGA1UEBhMCR0IxGzAZBgNVBAgMEkdyZWF0ZXIgTWFuY2hlc3RlcjEQMA4GA1UE
+BwwHU2FsZm9yZDEaMBgGA1UECgwRQ29tb2RvIENBIExpbWl0ZWQxITAfBgNVBAMM
+GEFBQSBDZXJ0aWZpY2F0ZSBTZXJ2aWNlczCCASIwDQYJKoZIhvcNAQEBBQADggEP
+ADCCAQoCggEBAL5AnfRu4ep2hxxNRUSOvkbIgwadwSr+GB+O5AL686tdUIoWMQua
+BtDFcCLNSS1UY8y2bmhGC1Pqy0wkwLxyTurxFa70VJoSCsN6sjNg4tqJVfMiWPPe
+3M/vg4aijJRPn2jymJBGhCfHdr/jzDUsi14HZGWCwEiwqJH5YZ92IFCokcdmtet4
+YgNW8IoaE+oxox6gmf049vYnMlhvB/VruPsUK6+3qszWY19zjNoFmag4qMsXeDZR
+rOme9Hg6jc8P2ULimAyrL58OAd7vn5lJ8S3frHRNG5i1R8XlKdH5kBjHYpy+g8cm
+ez6KJcfA3Z3mNWgQIJ2P2N7Sw4ScDV7oL8kCAwEAAaOBwDCBvTAdBgNVHQ4EFgQU
+oBEKIz6W8Qfs4q8p74Klf9AwpLQwDgYDVR0PAQH/BAQDAgEGMA8GA1UdEwEB/wQF
+MAMBAf8wewYDVR0fBHQwcjA4oDagNIYyaHR0cDovL2NybC5jb21vZG9jYS5jb20v
+QUFBQ2VydGlmaWNhdGVTZXJ2aWNlcy5jcmwwNqA0oDKGMGh0dHA6Ly9jcmwuY29t
+b2RvLm5ldC9BQUFDZXJ0aWZpY2F0ZVNlcnZpY2VzLmNybDANBgkqhkiG9w0BAQUF
+AAOCAQEACFb8AvCb6P+k+tZ7xkSAzk/ExfYAWMymtrwUSWgEdujm7l3sAg9g1o1Q
+GE8mTgHj5rCl7r+8dFRBv/38ErjHT1r0iWAFf2C3BUrz9vHCv8S5dIa2LX1rzNLz
+Rt0vxuBqw8M0Ayx9lt1awg6nCpnBBYurDC/zXDrPbDdVCYfeU0BsWO/8tqtlbgT2
+G9w84FoVxp7Z8VlIMCFlA2zs6SFz7JsDoeA3raAVGI/6ugLOpyypEBMs1OUIJqsi
+l2D4kF501KKaU73yqWjgom7C12yxow+ev+to51byrvLjKzg6CYG1a4XXvi3tPxq3
+smPi9WIsgtRqAEFQ8TmDn5XpNpaYbg==
+-----END CERTIFICATE-----
+EOF_CERTS
+update-ca-trust || fatal "Failed to update the Cygwin CA trust store"
+
 echo -e "\n------------------\nValidate node ... "
 echo "{\"ip\": \"$IP\", \"dnsname\": \"${DNSNAME}\"}" > ${TMPDIR}/validate_req.json
 VALIDATE_STATUS=$(curl -sSL -d @${TMPDIR}/validate_req.json  -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" \
@@ -656,7 +709,14 @@ function createRebootNodeTask() {
 
 function setUpMonitoring() {
   $monitoring_dir="C:\codefresh\monitoring"
-  
+
+  function assertSha256($path, $sha256) {
+    if ((Get-FileHash -Algorithm SHA256 $path).Hash -ne $sha256) {
+      Remove-Item -Path $path -Force
+      throw "Checksum mismatch for $path"
+    }
+  }
+
   function installNodeExporter() {
     $version = "0.15.0"
 
@@ -670,6 +730,7 @@ function setUpMonitoring() {
     (New-Object System.Net.WebClient).DownloadFile(`
       "https://github.com/prometheus-community/windows_exporter/releases/download/v$version/windows_exporter-$version-amd64.exe", `
       "$monitoring_dir\windows_exporter-$version-amd64.exe");
+    assertSha256 "$monitoring_dir\windows_exporter-$version-amd64.exe" "dea7c7e8672ba7de1ab12642a8f4633cce3a9efa6b6882ded89d5e28cfd87b39"
 
     (New-Object System.Net.WebClient).DownloadString(`
     'https://raw.githubusercontent.com/codefresh-io/docker-vm/master/monitoring/node_exporter/node_exporter.yml') > $monitoring_dir/node_exporter.yml;
@@ -690,6 +751,7 @@ function setUpMonitoring() {
 
     # install ruby needed by fluentd
     (New-Object System.Net.WebClient).DownloadFile("https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-2.7.2-1/rubyinstaller-devkit-2.7.2-1-x64.exe", "$env:TEMP\rubyinstaller-devkit-2.7.2-1-x64.exe")
+    assertSha256 "$env:TEMP\rubyinstaller-devkit-2.7.2-1-x64.exe" "a4865d9e555b6061382741d041455d91b058bfcbd006766663cccb5bb6bb20d3"
     Start-Process -Wait $env:TEMP/rubyinstaller-devkit-2.7.2-1-x64.exe -ArgumentList "/silent /dir=`"$ruby_dir`" /mergetasks=`"assocfiles,modpath`""
 
     # install fluentd

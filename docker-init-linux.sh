@@ -125,37 +125,17 @@ SRV_TLS_CA_CERT=${CERTS_DIR}/cf-ca.pem
 mkdir -p $TMPDIR $CERTS_DIR
 
 
-
-echo -e "\n------------------\nValidate node ... "
-echo "{\"ip\": \"$IP\", \"dnsname\": \"${DNSNAME}\"}" > ${TMPDIR}/validate_req.json
-VALIDATE_STATUS=$(curl -sSL -d @${TMPDIR}/validate_req.json  -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" \
-      -o ${TMP_VALIDATE_RESPONCE_FILE} -D ${TMP_VALIDATE_HEADERS_FILE} -w '%{http_code}' $API_HOST/validate )
-echo "Validate Node request completed with HTTP_STATUS_CODE=$VALIDATE_STATUS"
-if [[ $VALIDATE_STATUS != 200 ]]; then
-   echo "ERROR: Node Validation failed"
-   if [[ -f ${TMP_VALIDATE_RESPONCE_FILE} ]]; then
-     mv ${TMP_VALIDATE_RESPONCE_FILE} ${TMP_VALIDATE_RESPONCE_FILE}.error
-     cat ${TMP_VALIDATE_RESPONCE_FILE}.error
-   fi
-   exit 1
-fi
-
-echo "Validate responce: "
-cat ${TMP_VALIDATE_RESPONCE_FILE}
-source ${TMP_VALIDATE_RESPONCE_FILE}
-
-[[ -z "$CF_NODE_NAME" ]] && fatal "Validation failed - cannot find CF_NODE_NAME"
-
+# Packages (and ca-certificates in particular) must be up to date before the first HTTPS request
 echo -e "\n------------------\n Installing packages ... "
 source /etc/os-release || fatal  "Operating system is not supported"
 if [[ "$ID" =~ 'rhel' || "$ID_LIKE" =~ 'rhel' ]]; then
   INSTALLER="yum install -y"
   INST_CHECK="rpm -q"
-  PKGLIST=( openssl zip unzip gawk curl )
+  PKGLIST=( openssl zip unzip gawk curl gnupg2 )
 elif [[ "$ID" =~ 'debian' || "$ID_LIKE" =~ 'debian' ]]; then
   INSTALLER="apt-get install -y"
   INST_CHECK="dpkg -l"
-  PKGLIST=( openssl zip unzip gawk curl )
+  PKGLIST=( openssl zip unzip gawk curl gnupg )
   apt-get update -y
 else
   fatal "Operating system is not supported"
@@ -177,6 +157,31 @@ if [[ -n "$PKGLIST_INSTALL" ]]; then
    echo "Running $INSTALLER $PKGLIST_INSTALL ..."
    $INSTALLER $PKGLIST_INSTALL || fatal "Failed to install packages"
 fi
+
+# Always install/upgrade - the installed version may still trust revoked CAs
+echo "Running $INSTALLER ca-certificates ..."
+$INSTALLER ca-certificates || fatal "Failed to update ca-certificates"
+
+
+echo -e "\n------------------\nValidate node ... "
+echo "{\"ip\": \"$IP\", \"dnsname\": \"${DNSNAME}\"}" > ${TMPDIR}/validate_req.json
+VALIDATE_STATUS=$(curl -sSL -d @${TMPDIR}/validate_req.json  -H "Content-Type: application/json" -H "x-codefresh-api-key: ${TOKEN}" \
+      -o ${TMP_VALIDATE_RESPONCE_FILE} -D ${TMP_VALIDATE_HEADERS_FILE} -w '%{http_code}' $API_HOST/validate )
+echo "Validate Node request completed with HTTP_STATUS_CODE=$VALIDATE_STATUS"
+if [[ $VALIDATE_STATUS != 200 ]]; then
+   echo "ERROR: Node Validation failed"
+   if [[ -f ${TMP_VALIDATE_RESPONCE_FILE} ]]; then
+     mv ${TMP_VALIDATE_RESPONCE_FILE} ${TMP_VALIDATE_RESPONCE_FILE}.error
+     cat ${TMP_VALIDATE_RESPONCE_FILE}.error
+   fi
+   exit 1
+fi
+
+echo "Validate responce: "
+cat ${TMP_VALIDATE_RESPONCE_FILE}
+source ${TMP_VALIDATE_RESPONCE_FILE}
+
+[[ -z "$CF_NODE_NAME" ]] && fatal "Validation failed - cannot find CF_NODE_NAME"
 
 echo -e "\n------------------\nGenerating docker server tls certificates ... "
 if [[ "$GENERATE_CERTS" == 'true' || ! -f ${SRV_TLS_CERT} || ! -f ${SRV_TLS_KEY} || ! -f ${SRV_TLS_CA_CERT} ]]; then
@@ -253,12 +258,49 @@ fi
 
 
 
+DOCKER_REPO_URL=https://download.docker.com/linux
+# Docker release signing keys - https://docs.docker.com/engine/install/
+DOCKER_DEB_KEY_FINGERPRINT=9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+DOCKER_RPM_KEY_FINGERPRINT=060A61C51B558A7F742B77AAC52FEB6B621E9F35
+DOCKER_PKGS="docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin"
+
+# Downloads a repo signing key and installs only the key with the pinned fingerprint,
+# so any extra keys in the download are never trusted
+fetch_docker_key() {
+   local url=$1 fingerprint=$2 dest=$3
+   local gpg_home=${TMPDIR}/gnupg
+   rm -rf $gpg_home && mkdir -p -m 700 $gpg_home
+   curl -fsSL "$url" -o ${TMPDIR}/docker.gpg || fatal "Failed to download $url"
+   gpg --batch --quiet --homedir $gpg_home --import ${TMPDIR}/docker.gpg 2>/dev/null
+   gpg --batch --homedir $gpg_home --armor --export "$fingerprint" > ${TMPDIR}/docker-pinned.gpg
+   [[ -s ${TMPDIR}/docker-pinned.gpg ]] || fatal "Key $fingerprint not found in $url"
+   install -m 0644 ${TMPDIR}/docker-pinned.gpg "$dest"
+}
+
 if [[ $INSTALL_DOCKER == 'true' ]]; then
    echo -e "\n------------------\nInstalling docker ... "
-   curl -sSL https://get.docker.com/ | sudo CHANNEL=stable sh -
+   if [[ "$ID" =~ 'rhel' || "$ID_LIKE" =~ 'rhel' ]]; then
+      [[ "$ID" == 'rhel' ]] && DOCKER_DIST=rhel || DOCKER_DIST=centos
+      fetch_docker_key $DOCKER_REPO_URL/$DOCKER_DIST/gpg $DOCKER_RPM_KEY_FINGERPRINT /etc/pki/rpm-gpg/docker-ce.gpg
+      echo "[docker-ce-stable]
+name=Docker CE Stable
+baseurl=$DOCKER_REPO_URL/$DOCKER_DIST/\$releasever/\$basearch/stable
+enabled=1
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/docker-ce.gpg" > /etc/yum.repos.d/docker-ce.repo
+      $INSTALLER $DOCKER_PKGS && systemctl enable docker
+   else
+      [[ "$ID" == 'ubuntu' ]] && DOCKER_DIST=ubuntu || DOCKER_DIST=debian
+      [[ -z "$VERSION_CODENAME" ]] && fatal "Cannot determine release codename from /etc/os-release"
+      mkdir -p -m 0755 /etc/apt/keyrings
+      fetch_docker_key $DOCKER_REPO_URL/$DOCKER_DIST/gpg $DOCKER_DEB_KEY_FINGERPRINT /etc/apt/keyrings/docker.asc
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] $DOCKER_REPO_URL/$DOCKER_DIST $VERSION_CODENAME stable" \
+         > /etc/apt/sources.list.d/docker.list
+      apt-get update -y && $INSTALLER $DOCKER_PKGS
+   fi
    EXIT_CODE=$?
-   if [[ $EXIT_CODE != 0 && $EXIT_CODE != 130 ]] || ! which docker ; then
-      echo -e "\n---- ERROR: Docker installation from https://get.docker.com/ failed - $EXIT_CODE , please fix and rerun the script"
+   if [[ $EXIT_CODE != 0 ]] || ! which docker ; then
+      echo -e "\n---- ERROR: Docker installation from $DOCKER_REPO_URL failed - $EXIT_CODE , please fix and rerun the script"
       exit 1
    fi
 fi
